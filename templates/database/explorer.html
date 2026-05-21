@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Database Explorer{% endblock %}
+{% block page_title %}Database Explorer{% endblock %}
+{% block page_subtitle %}SQLite database tables and schema viewer{% endblock %}
+
+{% block content %}
+<!-- DB Overview Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ tables|length }}</span>
+            <span class="stat-label">Database Tables</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ tables|sum(attribute='row_count') }}</span>
+            <span class="stat-label">Total Records</span>
+        </div>
+    </div>
+    <div class="stat-card" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div class="stat-icon {% if session.get('db_write_mode') %}red{% else %}green{% endif %}">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {% if session.get('db_write_mode') %}
+                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    {% else %}
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    {% endif %}
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-value">{% if session.get('db_write_mode') %}Write Mode{% else %}Read-Only{% endif %}</span>
+                <span class="stat-label">Access Mode</span>
+            </div>
+        </div>
+        <form action="{{ url_for('database.toggle_mode') }}" method="POST">
+            <button type="submit" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff; cursor: pointer; border-radius: 4px;">
+                Toggle
+            </button>
+        </form>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">Admin</span>
+            <span class="stat-label">{{ current_user.username }} &middot; Full Access</span>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="db-quick-links">
+    <a href="{{ url_for('database.attack_logs') }}" class="db-quick-link attack-logs">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <span>Attack Logs Viewer</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+</div>
+
+<!-- Table List -->
+<div class="db-tables-grid">
+    {% for table in tables %}
+    <div class="db-table-card">
+        <div class="db-table-header">
+            <div class="db-table-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/>
+                </svg>
+            </div>
+            <div>
+                <h4>{{ table.name }}</h4>
+                <span class="db-table-count">{{ table.row_count }} records</span>
+            </div>
+            <a href="{{ url_for('database.view_table', table_name=table.name) }}" class="action-btn">Browse &rarr;</a>
+        </div>
+        <div class="db-schema">
+            <div class="db-schema-title">Schema</div>
+            <div class="db-columns">
+                {% for col in table.columns %}
+                <div class="db-column">
+                    <span class="db-col-name">{{ col.name }}</span>
+                    <span class="db-col-type">{{ col.type }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

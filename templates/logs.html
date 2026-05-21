@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}Attack Logs{% endblock %}
+{% block page_title %}Attack Forensics{% endblock %}
+{% block page_subtitle %}Full log of every threat detected across all your analyzed files{% endblock %}
+
+{% block content %}
+
+<!-- Summary Stats -->
+<div class="stats-grid" style="margin-bottom: 24px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(255,107,107,0.12); color: #ff6b6b;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value">{{ total_threats }}</div>
+            <div class="stat-label">Total Threat Logs</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(255,107,107,0.18); color: #ff6b6b;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#ff6b6b;">{{ critical_count }}</div>
+            <div class="stat-label">Critical Severity</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(255,169,77,0.12); color: #ffa94d;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#ffa94d;">{{ high_count }}</div>
+            <div class="stat-label">High Severity</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(64,138,113,0.15); color: #408A71;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#408A71;">{{ mitigated_count }}</div>
+            <div class="stat-label">IPS Mitigated</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="table-card" style="margin-bottom: 20px; padding: 16px 20px;">
+    <form method="GET" action="{{ url_for('analysis.attack_logs') }}" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+        <!-- Search -->
+        <div style="flex:1; min-width:200px;">
+            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Search</label>
+            <div style="position:relative;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-muted);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" name="search" value="{{ search_filter }}" placeholder="Attack, category, file…"
+                    style="width:100%; padding:8px 10px 8px 32px; background:rgba(64,138,113,0.06); border:1px solid rgba(64,138,113,0.2); border-radius:8px; color:var(--text-primary); font-size:0.85rem; box-sizing:border-box;">
+            </div>
+        </div>
+
+        <!-- Severity -->
+        <div style="min-width:140px;">
+            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Severity</label>
+            <select name="severity" style="width:100%; padding:8px 10px; background:rgba(64,138,113,0.06); border:1px solid rgba(64,138,113,0.2); border-radius:8px; color:var(--text-primary); font-size:0.85rem;">
+                <option value="">All</option>
+                {% for s in severities %}
+                <option value="{{ s }}" {% if s == severity_filter %}selected{% endif %}>{{ s|upper }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Category -->
+        <div style="min-width:160px;">
+            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Category</label>
+            <select name="category" style="width:100%; padding:8px 10px; background:rgba(64,138,113,0.06); border:1px solid rgba(64,138,113,0.2); border-radius:8px; color:var(--text-primary); font-size:0.85rem;">
+                <option value="">All Categories</option>
+                {% for c in categories %}
+                <option value="{{ c }}" {% if c == category_filter %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="action-btn" style="cursor:pointer; padding:8px 18px; height:36px;">Filter</button>
+        {% if severity_filter or category_filter or search_filter %}
+        <a href="{{ url_for('analysis.attack_logs') }}" class="action-btn" style="padding:8px 18px; height:36px; background:rgba(255,107,107,0.1); border-color:#ff6b6b; color:#ff6b6b;">✕ Clear</a>
+        {% endif %}
+
+        <!-- Export button -->
+        <button type="button" onclick="exportCSV()" class="action-btn" style="cursor:pointer; padding:8px 18px; height:36px; margin-left:auto; background:rgba(64,138,113,0.12);">
+            ⬇ Export CSV
+        </button>
+    </form>
+</div>
+
+<!-- Logs Table -->
+<div class="table-card">
+    <div class="table-header">
+        <h3>Detected Threats
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:400; margin-left:8px;">
+                {{ pagination.total }} result{% if pagination.total != 1 %}s{% endif %}
+                {% if severity_filter or category_filter or search_filter %} (filtered){% endif %}
+            </span>
+        </h3>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table" id="logsTable">
+            <thead>
+                <tr>
+                    <th style="width:30px;"></th>
+                    <th>Timestamp</th>
+                    <th>Source IP</th>
+                    <th>Destination IP</th>
+                    <th>Category</th>
+                    <th>Specific Attack</th>
+                    <th>Flows</th>
+                    <th>IPS Drops</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                {% set results = log.results_json | fromjson if log.results_json else {} %}
+                <tr class="log-row {{ 'row-anomaly' if log.attack_category else 'row-normal' }}"
+                    onclick="toggleDetail('detail-{{ log.id }}')" style="cursor:pointer;">
+                    <td style="color:var(--text-muted); font-size:0.8rem;">▶</td>
+                    <td class="td-time">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '—' }}</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--green-light);">{{ log.source_ip or '—' }}</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #a29bfe;">{{ log.dest_ip or '—' }}</td>
+                    <td>
+                        {% if log.attack_category %}
+                        <span class="category-badge {{ log.attack_category|lower|replace('+','') }}">{{ log.attack_category }}</span>
+                        {% else %}<span style="color:var(--text-muted)">—</span>{% endif %}
+                    </td>
+                    <td><strong>{{ log.specific_attack or '—' }}</strong></td>
+
+                    <td>{{ results.get('count', log.total_flows or '—') }}</td>
+                    <td>
+                        {% if results.get('ips_drops', 0) > 0 %}
+                        <span style="color:#ff6b6b; font-weight:600;">{{ results.get('ips_drops') }}</span>
+                        {% else %}<span style="color:var(--text-muted);">0</span>{% endif %}
+                    </td>
+                    <td>
+                        <span class="severity-badge {{ log.severity }}">
+                            {{ log.severity|upper }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if log.is_ips_action %}
+                        <span class="ips-badge">🛡 BLOCKED</span>
+                        {% else %}
+                        <span class="ids-badge">👁 LOGGED</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <!-- Expandable detail row -->
+                <tr id="detail-{{ log.id }}" class="detail-row" style="display:none;">
+                    <td colspan="11" style="padding:0;">
+                        <div style="padding:16px 24px; background:rgba(64,138,113,0.04); border-top:1px solid rgba(64,138,113,0.1); border-bottom:1px solid rgba(64,138,113,0.1);">
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Source File</div>
+                                    <div style="font-size:0.88rem; color:var(--text-primary); word-break:break-all;">{{ log.filename }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Network Source</div>
+                                    <div style="font-size:0.88rem; font-family:'JetBrains Mono'; color:var(--green-light);">{{ log.source_ip or 'N/A' }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Network Destination</div>
+                                    <div style="font-size:0.88rem; font-family:'JetBrains Mono'; color:#a29bfe;">{{ log.dest_ip or 'N/A' }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Detection Engine</div>
+                                    <div><code style="font-size:0.8rem; background:rgba(64,138,113,0.1); padding:2px 6px; border-radius:4px;">{{ log.detected_by or 'N/A' }}</code></div>
+                                </div>
+
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Total Flows in File</div>
+                                    <div style="font-size:0.88rem; color:var(--text-primary);">{{ log.total_flows or '—' }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Normal / Anomaly</div>
+                                    <div style="font-size:0.88rem;">
+                                        <span style="color:#408A71;">{{ log.normal_count or 0 }} normal</span>
+                                        &nbsp;/&nbsp;
+                                        <span style="color:#ff6b6b;">{{ log.anomaly_count or 0 }} anomaly</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Flows in This Attack</div>
+                                    <div style="font-size:0.88rem; color:var(--text-primary);">{{ results.get('count', '—') }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">IPS Drops</div>
+                                    <div style="font-size:0.88rem; color:{% if results.get('ips_drops', 0) > 0 %}#ff6b6b{% else %}var(--text-muted){% endif %};">
+                                        {{ results.get('ips_drops', 0) }} dropped
+                                    </div>
+                                </div>
+                                {% if log.mitre_info %}
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">MITRE ATT&CK</div>
+                                    <div style="font-size:0.88rem; color:#a29bfe;">{{ log.mitre_info }}</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="11" class="empty-state" style="text-align:center; padding:48px;">
+                        <div style="font-size:2rem; margin-bottom:12px;">🔍</div>
+                        <div style="font-size:1rem; color:var(--text-muted);">No attack logs found{% if severity_filter or category_filter or search_filter %} matching your filters{% endif %}.</div>
+                        <div style="margin-top:8px; font-size:0.82rem; color:var(--text-muted);">Upload and analyze a CSV file to populate this log.</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if pagination.pages > 1 %}
+    <div style="display:flex; justify-content:center; align-items:center; gap:8px; padding:20px;">
+        {% if pagination.has_prev %}
+        <a href="{{ url_for('analysis.attack_logs', page=pagination.prev_num, severity=severity_filter, category=category_filter, search=search_filter) }}"
+           class="action-btn" style="padding:6px 14px;">← Prev</a>
+        {% endif %}
+
+        <span style="font-size:0.82rem; color:var(--text-muted);">
+            Page {{ pagination.page }} of {{ pagination.pages }}
+            &nbsp;·&nbsp; {{ pagination.total }} total records
+        </span>
+
+        {% if pagination.has_next %}
+        <a href="{{ url_for('analysis.attack_logs', page=pagination.next_num, severity=severity_filter, category=category_filter, search=search_filter) }}"
+           class="action-btn" style="padding:6px 14px;">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDetail(id) {
+    const row = document.getElementById(id);
+    if (!row) return;
+    const isHidden = row.style.display === 'none';
+    row.style.display = isHidden ? 'table-row' : 'none';
+    // Rotate the arrow indicator on the parent row
+    const prev = row.previousElementSibling;
+    if (prev) {
+        const arrow = prev.querySelector('td:first-child');
+        if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
+    }
+}
+
+function exportCSV() {
+    const table = document.getElementById('logsTable');
+    const rows = [...table.querySelectorAll('tr:not(.detail-row)')];
+    const csv = rows.map(r =>
+        [...r.querySelectorAll('th, td')]
+            .filter((_, i) => i > 0 && i < 9)
+            .map(c => '"' + c.innerText.replace(/"/g, '""').replace(/\n/g, ' ') + '"')
+            .join(',')
+    ).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'hades_attack_logs.csv';
+    a.click();
+}
+</script>
+{% endblock %}

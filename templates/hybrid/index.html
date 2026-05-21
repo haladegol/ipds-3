@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% block title %}Hybrid Console{% endblock %}
+{% block page_title %}Hybrid IPS Console{% endblock %}
+{% block page_subtitle %}HADES signature engine status, top triggered rules, and operational controls{% endblock %}
+
+{% block content %}
+
+<!-- Engine Stats -->
+<div class="stats-grid" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(64,138,113,0.15);color:#408A71;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value">{{ total_signatures }}</div>
+            <div class="stat-label">Total Signatures</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(64,197,113,0.15);color:#40c571;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#40c571;">{{ active_signatures }}</div>
+            <div class="stat-label">Active & Enforcing</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(255,107,107,0.12);color:#ff6b6b;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#ff6b6b;">{{ total_mitigations }}</div>
+            <div class="stat-label">IPS Block Events</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(162,155,254,0.12);color:#a29bfe;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#a29bfe;">{{ telemetry.latency }}</div>
+            <div class="stat-label">Pattern Match Latency</div>
+        </div>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
+
+<!-- Left: Top Triggered Signatures -->
+<div class="table-card">
+    <div class="table-header">
+        <h3>🔥 Top Triggered Signatures
+            <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-left:8px;">sorted by hit count</span>
+        </h3>
+        <a href="{{ url_for('signatures.index') }}" class="action-btn" style="padding:6px 14px;font-size:0.8rem;">Manage All →</a>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>SID</th>
+                    <th>Signature Name</th>
+                    <th>Severity</th>
+                    <th>MITRE Tactic</th>
+                    <th style="text-align:right;">Hits</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sig in top_signatures %}
+                <tr>
+                    <td style="color:var(--text-muted);font-size:0.8rem;">{{ loop.index }}</td>
+                    <td><code style="font-size:0.75rem;color:#ffa94d;font-weight:700;">{{ sig.sid }}</code></td>
+                    <td>
+                        <div style="font-weight:600;font-size:0.88rem;">{{ sig.name }}</div>
+                        {% if sig.description %}
+                        <div style="font-size:0.7rem;color:var(--text-muted);">{{ sig.description[:80] }}{% if sig.description|length > 80 %}…{% endif %}</div>
+                        {% endif %}
+                    </td>
+                    <td><span class="severity-badge {{ sig.severity }}">{{ sig.severity|upper }}</span></td>
+                    <td style="font-size:0.8rem;color:var(--text-muted);">{{ sig.mitre_tactic or '—' }}</td>
+                    <td style="text-align:right;">
+                        <strong style="font-family:'JetBrains Mono',monospace;color:{% if sig.hit_count > 100 %}#ff6b6b{% elif sig.hit_count > 10 %}#ffa94d{% else %}var(--text-primary){% endif %};">
+                            {{ sig.hit_count }}
+                        </strong>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="empty-state" style="padding:40px;text-align:center;">
+                        <div style="font-size:1.5rem;margin-bottom:8px;">🛡️</div>
+                        No signature hits yet. Run an analysis to populate this list.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Right: Engine Controls -->
+<div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- IPS Mode State -->
+    <div class="table-card" style="padding:18px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <h3 style="margin:0;font-size:1rem;">⚡ Engine Mode</h3>
+            <span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;
+                {% if ips_bypass_mode %}background:rgba(255,169,77,0.15);color:#ffa94d;border:1px solid #ffa94d;
+                {% elif ips_mode_enabled and auto_block_critical %}background:rgba(255,169,77,0.15);color:#ffa94d;border:1px solid #ffa94d;
+                {% elif ips_mode_enabled and not auto_block_critical %}background:rgba(64,197,113,0.15);color:#40c571;border:1px solid #40c571;
+                {% else %}background:rgba(162,155,254,0.12);color:#a29bfe;border:1px solid #a29bfe;{% endif %}">
+                {% if ips_bypass_mode %}⚠ BYPASS{% elif ips_mode_enabled and auto_block_critical %}● HYBRID IPS{% elif ips_mode_enabled and not auto_block_critical %}● STRICT IPS{% else %}○ IDS PASSIVE{% endif %}
+            </span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            {% if not ips_mode_enabled %}
+            <div style="grid-column:span 2;">
+                <a href="{{ url_for('hybrid.run_task', task_id='enable_ips') }}"
+                   style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;background:rgba(64,197,113,0.12);border:1px solid #40c571;border-radius:8px;text-decoration:none;color:#40c571;font-size:0.85rem;font-weight:700;">
+                    ▶ Enable IPS Mode
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Switches HADES from passive IDS monitoring to active IPS enforcement.<br>Matched threats will be blocked and logged automatically.</p></details>
+            </div>
+            {% else %}
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='disable_ips') }}"
+                   style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;background:rgba(162,155,254,0.08);border:1px solid rgba(162,155,254,0.3);border-radius:8px;text-decoration:none;color:#a29bfe;font-size:0.8rem;font-weight:600;">
+                    ⏸ IDS Only
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Reverts to passive IDS mode — threats are detected and logged only.<br>No traffic will be blocked or dropped by the engine.</p></details>
+            </div>
+            {% if ips_bypass_mode %}
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='bypass_off') }}"
+                   style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;background:rgba(64,197,113,0.08);border:1px solid rgba(64,197,113,0.3);border-radius:8px;text-decoration:none;color:#40c571;font-size:0.8rem;font-weight:600;">
+                    ✓ Exit Bypass
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Disables fail-open bypass and restores active IPS enforcement.<br>Traffic matching signatures will be blocked again.</p></details>
+            </div>
+            {% else %}
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='bypass_on') }}"
+                   onclick="return confirm('Enable fail-open bypass? IPS will NOT block any traffic.')"
+                   style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;background:rgba(255,169,77,0.08);border:1px solid rgba(255,169,77,0.3);border-radius:8px;text-decoration:none;color:#ffa94d;font-size:0.8rem;font-weight:600;">
+                    ⚠ Bypass On
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Puts the engine in fail-open (passthrough) mode — all traffic passes freely.<br>Use during maintenance to avoid disrupting legitimate flows.</p></details>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Signature Registry Controls -->
+    <div class="table-card">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(64,138,113,0.1);">
+            <h3 style="margin:0;font-size:1rem;">🛡️ Signature Registry</h3>
+        </div>
+        <div style="padding:14px 20px;display:flex;flex-direction:column;gap:10px;">
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='bulk_seed') }}"
+                   onclick="return confirm('Pull latest ET Open signatures? This fetches and compiles thousands of new rules.')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(64,138,113,0.08);border:1px solid rgba(64,138,113,0.2);border-radius:8px;text-decoration:none;color:var(--text-primary);font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#408A71" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3L15.5 7.5z"/></svg>
+                    Sync ET Open Rules
+                    <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);">~10k sigs</span>
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Downloads the latest Emerging Threats Open ruleset and compiles it into your registry.<br>Adds real-world PCRE patterns covering malware, exploits, and C2 traffic.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='sync_talos') }}"
+                   onclick="return confirm('Sync Snort Community Rules from Cisco Talos? This downloads the free Talos-certified ruleset and the Talos IP block list.')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(0,174,239,0.06);border:1px solid rgba(0,174,239,0.2);border-radius:8px;text-decoration:none;color:#00aeef;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00aeef" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                    Sync Talos / Snort Rules
+                    <span style="margin-left:auto;font-size:0.7rem;color:#00aeef;opacity:0.7;">community</span>
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Downloads the Snort Community Ruleset (Cisco Talos, GPLv2, free — no key needed) and the Talos IP block list.<br>Parsed into TALOS-SID signatures with CVSS scores and MITRE ATT&amp;CK mapping.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='activate_all_sigs') }}"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(64,197,113,0.06);border:1px solid rgba(64,197,113,0.2);border-radius:8px;text-decoration:none;color:#40c571;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#40c571" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    Activate All Signatures
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Sets every signature in the registry to active enforcing state in one click.<br>Use this to restore the full protection profile after a bulk deactivation.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='deactivate_all_sigs') }}"
+                   onclick="return confirm('Deactivate ALL signatures? Signature engine will be silent.')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,169,77,0.06);border:1px solid rgba(255,169,77,0.2);border-radius:8px;text-decoration:none;color:#ffa94d;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffa94d" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Deactivate All Signatures
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Pauses every rule without deleting them — the engine will not fire on any pattern.<br>Useful for testing or isolating a false-positive storm.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='reset_hit_counts') }}"
+                   onclick="return confirm('Reset all signature hit counters to 0?')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(162,155,254,0.06);border:1px solid rgba(162,155,254,0.15);border-radius:8px;text-decoration:none;color:#a29bfe;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                    Reset All Hit Counts
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Zeros the hit counter on every signature, giving you a clean measurement baseline.<br>Helpful after syncing new rules or starting a new monitoring period.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='delete_zero_hit_sigs') }}"
+                   onclick="return confirm('Permanently delete all zero-hit signatures?')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,107,107,0.06);border:1px solid rgba(255,107,107,0.15);border-radius:8px;text-decoration:none;color:#ff6b6b;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    Purge Unused Signatures
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Permanently removes every rule that has never matched any traffic (hit count = 0).<br>Reduces registry size and improves match-scan performance.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('signatures.index') }}"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.12);border-radius:8px;text-decoration:none;color:var(--text-secondary);font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Open Signature Editor
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Opens the full signature management page to search, filter, add, and delete individual rules.<br>Deploy custom PCRE patterns with MITRE ATT&CK mapping.</p></details>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maintenance -->
+    <div class="table-card">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(64,138,113,0.1);">
+            <h3 style="margin:0;font-size:1rem;">🔧 Maintenance</h3>
+        </div>
+        <div style="padding:14px 20px;display:flex;flex-direction:column;gap:10px;">
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='clear_blocks') }}"
+                   onclick="return confirm('Purge ALL active blocked IPs?')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,107,107,0.06);border:1px solid rgba(255,107,107,0.15);border-radius:8px;text-decoration:none;color:#ff6b6b;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    Purge All Blocked IPs
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Removes every entry from the block list.<br>Use after a false-positive event or to reset the IP block state.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='clear_attack_logs') }}"
+                   onclick="return confirm('Delete all your attack log records? This cannot be undone.')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,107,107,0.06);border:1px solid rgba(255,107,107,0.15);border-radius:8px;text-decoration:none;color:#ff6b6b;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    Clear All Attack Logs
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Permanently deletes all attack log records tied to your account.<br>Does not affect signatures or blocked IPs — only the detection event history.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='flush_signals') }}"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,169,77,0.06);border:1px solid rgba(255,169,77,0.15);border-radius:8px;text-decoration:none;color:#ffa94d;font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffa94d" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    Flush SIEM Signal Log
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Empties the <code style="font-size:0.7rem;">ips_signals.json</code> file that feeds the SIEM integration pipeline.<br>Resets the rolling signal buffer without affecting the database.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='health_check') }}"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.12);border-radius:8px;text-decoration:none;color:var(--text-secondary);font-size:0.83rem;font-weight:600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    Run Health Check
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Verifies the database connection, index integrity, and core engine components.<br>Results are written to the System Log and flashed as a status message.</p></details>
+            </div>
+
+            <div>
+                <a href="{{ url_for('hybrid.run_task', task_id='strict_ips') }}"
+                   onclick="return confirm('Enable full strict IPS profile? All protection toggles will be turned ON.')"
+                   style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(64,138,113,0.1);border:1px solid rgba(64,138,113,0.3);border-radius:8px;text-decoration:none;color:#408A71;font-size:0.83rem;font-weight:700;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#408A71" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Apply Strict IPS Profile
+                </a>
+                <details style="margin-top:4px;"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;list-style:none;padding:2px 4px;">ⓘ What this does</summary>
+                <p style="font-size:0.72rem;color:var(--text-muted);margin:5px 4px 0;line-height:1.5;">Enables all 13 IPS protection toggles at once (inline filtering, shunning, DDoS, geo-IP, etc.).<br>Equivalent to setting every capability to ON in the Settings page.</p></details>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Engine Telemetry -->
+    <div class="table-card" style="padding:18px 20px;">
+        <h4 style="margin:0 0 14px;font-size:0.9rem;">📡 Engine Telemetry</h4>
+        <div style="display:flex;flex-direction:column;gap:9px;font-size:0.82rem;">
+            <div style="display:flex;justify-content:space-between;padding-bottom:7px;border-bottom:1px solid rgba(64,138,113,0.08);">
+                <span style="color:var(--text-muted);">State</span>
+                <span style="color:#40c571;font-weight:700;">● ONLINE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding-bottom:7px;border-bottom:1px solid rgba(64,138,113,0.08);">
+                <span style="color:var(--text-muted);">Mode</span>
+                <span style="font-weight:600;color:{% if ips_bypass_mode %}#ffa94d{% elif ips_mode_enabled and auto_block_critical %}#ffa94d{% elif ips_mode_enabled and not auto_block_critical %}#40c571{% else %}#a29bfe{% endif %};">
+                    {% if ips_bypass_mode %}Bypass{% elif ips_mode_enabled and auto_block_critical %}Hybrid (Selective IPS){% elif ips_mode_enabled and not auto_block_critical %}Active (Strict IPS){% else %}Passive (IDS Mode){% endif %}
+                </span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding-bottom:7px;border-bottom:1px solid rgba(64,138,113,0.08);">
+                <span style="color:var(--text-muted);">Rules Loaded</span>
+                <span style="font-weight:600;font-family:'JetBrains Mono',monospace;">{{ telemetry.rules }}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding-bottom:7px;border-bottom:1px solid rgba(64,138,113,0.08);">
+                <span style="color:var(--text-muted);">Throughput</span>
+                <span style="font-weight:600;font-family:'JetBrains Mono',monospace;">{{ telemetry.throughput }}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+                <span style="color:var(--text-muted);">Integrity</span>
+                <span style="font-weight:600;color:#40c571;font-family:'JetBrains Mono',monospace;">{{ telemetry.integrity }}</span>
+            </div>
+        </div>
+    </div>
+
+</div><!-- right col -->
+</div><!-- grid -->
+{% endblock %}

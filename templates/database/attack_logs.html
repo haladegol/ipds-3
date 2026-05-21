@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Attack Logs Database{% endblock %}
+{% block page_title %}Attack Logs Database{% endblock %}
+{% block page_subtitle %}Full database view with advanced filtering{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="db-breadcrumb">
+    <a href="{{ url_for('database.explorer') }}">Database Explorer</a>
+    <span>&rsaquo;</span>
+    <span>attack_logs</span>
+</div>
+
+<!-- Filters -->
+<div class="db-filter-panel">
+    <form method="GET" class="db-filter-form">
+        <div class="filter-group">
+            <label>Category</label>
+            <select name="category" onchange="this.form.submit()">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {{ 'selected' if category_filter == cat else '' }}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Severity</label>
+            <select name="severity" onchange="this.form.submit()">
+                <option value="">All Severities</option>
+                {% for sev in severities %}
+                <option value="{{ sev }}" {{ 'selected' if severity_filter == sev else '' }}>{{ sev|upper }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Detection Engine</label>
+            <select name="detected_by" onchange="this.form.submit()">
+                <option value="">All Engines</option>
+                <option value="stage2.1" {{ 'selected' if detected_by_filter == 'stage2.1' else '' }}>Stage 2.1 (Primary)</option>
+                <option value="stage2.2" {{ 'selected' if detected_by_filter == 'stage2.2' else '' }}>Stage 2.2 (Fallback)</option>
+            </select>
+        </div>
+        {% if category_filter or severity_filter or detected_by_filter %}
+        <a href="{{ url_for('database.attack_logs') }}" class="action-btn" style="background:rgba(255,107,107,0.1);border-color:rgba(255,107,107,0.3);color:var(--red);align-self:flex-end;">Clear Filters</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Data Table -->
+<div class="table-card">
+    <div class="table-header">
+        <h3>Attack Log Records</h3>
+        <span class="table-count">{{ logs.total }} records</span>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Timestamp</th>
+                    <th>Filename</th>
+                    <th>Category</th>
+                    <th>Specific Attack</th>
+                    <th>Severity</th>
+                    <th>Engine</th>
+                    <th>Flows</th>
+                    <th>Anomalies</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs.items %}
+                <tr class="{{ 'row-anomaly' if log.severity in ['critical', 'high'] else '' }}">
+                    <td><code>#{{ log.id }}</code></td>
+                    <td class="td-time">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') if log.timestamp else 'N/A' }}</td>
+                    <td class="td-file">{{ log.filename or 'N/A' }}</td>
+                    <td>
+                        {% if log.attack_category %}
+                        <span class="category-badge {{ log.attack_category|lower|replace('+','') }}">{{ log.attack_category }}</span>
+                        {% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
+                    </td>
+                    <td><strong>{{ log.specific_attack or '—' }}</strong></td>
+                    <td><span class="severity-badge {{ log.severity }}">{{ log.severity|upper }} (CVSS {{ log.severity|cvss }})</span></td>
+                    <td><code>{{ log.detected_by or '—' }}</code></td>
+                    <td>{{ "{:,}".format(log.total_flows) if log.total_flows else '—' }}</td>
+                    <td class="td-anomaly">{{ "{:,}".format(log.anomaly_count) if log.anomaly_count else '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="empty-state">No attack logs found matching your filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if logs.pages > 1 %}
+    <div class="pagination-bar">
+        <span class="page-info">Page {{ logs.page }} of {{ logs.pages }} ({{ logs.total }} total)</span>
+        <div class="page-controls">
+            {% if logs.has_prev %}
+            <a href="{{ url_for('database.attack_logs', page=logs.prev_num, category=category_filter, severity=severity_filter, detected_by=detected_by_filter) }}" class="page-btn">&laquo; Prev</a>
+            {% endif %}
+            {% for p in logs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                <a href="{{ url_for('database.attack_logs', page=p, category=category_filter, severity=severity_filter, detected_by=detected_by_filter) }}" class="page-btn {{ 'active' if p == logs.page else '' }}">{{ p }}</a>
+                {% else %}
+                <span class="page-dots">...</span>
+                {% endif %}
+            {% endfor %}
+            {% if logs.has_next %}
+            <a href="{{ url_for('database.attack_logs', page=logs.next_num, category=category_filter, severity=severity_filter, detected_by=detected_by_filter) }}" class="page-btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

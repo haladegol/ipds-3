@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}PCAP Forensic Lab{% endblock %}
+{% block page_title %}Forensic Lab{% endblock %}
+{% block page_subtitle %}Reconstruct and inspect evidence from identified network threats.{% endblock %}
+
+{% block content %}
+<div class="table-card">
+    <div class="table-header">
+        <h3>Evidence Locker</h3>
+        <span class="table-count">{{ logs|length }} Logs Available for Reconstruction</span>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Source IP</th>
+                    <th>Category</th>
+                    <th>Specific Attack</th>
+                    <th>Severity</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><code>{{ log.source_ip or 'Internal' }}</code></td>
+                    <td><span class="category-badge">{{ log.attack_category }}</span></td>
+                    <td><strong>{{ log.specific_attack }}</strong></td>
+                    <td><span class="severity-badge {{ log.severity }}">{{ log.severity|upper }} (CVSS {{ log.severity|cvss }})</span></td>
+                    <td>
+                        <a href="{{ url_for('forensics.view_pcap', log_id=log.id) }}" class="btn-secondary" style="font-size: 0.75rem; padding: 5px 10px;">
+                            🧪 Open Lab
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="empty-state">No threats found in the evidence locker.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.category-badge {
+    background: rgba(64, 138, 113, 0.1);
+    color: var(--green-light);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    border: 1px solid rgba(64, 138, 113, 0.2);
+}
+</style>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Upload & Analyze{% endblock %}
+{% block page_title %}Upload & Analyze{% endblock %}
+{% block page_subtitle %}Upload network traffic CSV files for 3-stage threat analysis{% endblock %}
+
+{% block content %}
+<!-- Upload Area -->
+<div class="upload-section">
+    <form method="POST" action="{{ url_for('analysis.analyze') }}" enctype="multipart/form-data" id="uploadForm">
+        <div class="upload-zone" id="dropZone">
+            <div class="upload-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <h3>Drop your CSV files here</h3>
+            <p>or click to browse • CIC-IDS 2018 raw format supported • Multiple files allowed</p>
+            <input type="file" name="file" id="fileInput" accept=".csv" multiple hidden>
+            <div class="file-selected" id="fileSelected" style="display:none; flex-direction:column; gap:4px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span id="fileName" style="font-weight:600; color:var(--green-bright);"></span>
+                </div>
+                <span id="fileSize" style="font-size:0.75rem; color:var(--text-muted); margin-left:28px;"></span>
+            </div>
+        </div>
+
+        <!-- Pipeline Preview -->
+        <div class="pipeline-preview" id="pipelinePreview" style="display:none;">
+            <h4>Analysis Pipeline</h4>
+            <div class="pipeline-steps">
+                <div class="pipe-step" id="step1">
+                    <div class="step-indicator"><span>1</span></div>
+                    <div class="step-info">
+                        <strong>Binary Classification</strong>
+                        <p>Normal vs Anomaly (Random Forest)</p>
+                    </div>
+                </div>
+                <div class="pipe-step" id="step2">
+                    <div class="step-indicator"><span>2.1</span></div>
+                    <div class="step-info">
+                        <strong>Category Detection</strong>
+                        <p>5 Binary Classifiers</p>
+                    </div>
+                </div>
+                <div class="pipe-step" id="step2b">
+                    <div class="step-indicator fallback"><span>2.2</span></div>
+                    <div class="step-info">
+                        <strong>Fallback Classification</strong>
+                        <p>Multiclass (escaped attacks only)</p>
+                    </div>
+                </div>
+                <div class="pipe-step" id="step3">
+                    <div class="step-indicator"><span>3</span></div>
+                    <div class="step-info">
+                        <strong>Specific Attack ID</strong>
+                        <p>Per-category classifier</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="analyze-btn" id="analyzeBtn" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Analyze Traffic</span>
+        </button>
+    </form>
+</div>
+
+<!-- Previous Sessions -->
+<div class="table-card" id="logs-section">
+    <div class="table-header">
+        <h3>Previous Analysis Sessions</h3>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>File</th>
+                    <th>Status</th>
+                    <th>Total Flows</th>
+                    <th>Normal</th>
+                    <th>Anomalies</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td class="td-time">{{ s.upload_time.strftime('%Y-%m-%d %H:%M') if s.upload_time else 'N/A' }}</td>
+                    <td class="td-file">{{ s.filename }}</td>
+                    <td><span class="status-badge {{ s.status }}">{{ s.status|upper }}</span></td>
+                    <td>{{ s.total_flows or 0 }}</td>
+                    <td class="td-normal">{{ s.normal_count or 0 }}</td>
+                    <td class="td-anomaly">{{ s.anomaly_count or 0 }}</td>
+                    <td style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                        {% if s.status == 'completed' %}
+                        <a href="{{ url_for('analysis.results', session_id=s.id) }}" class="action-btn">View Results</a>
+                        {% endif %}
+                        {% if s.status in ('processing', 'pending') %}
+                        <form method="POST" action="{{ url_for('analysis.cancel_session', session_id=s.id) }}" style="margin:0;">
+                            <button type="submit" class="action-btn" style="background:rgba(255,169,77,0.15);border-color:#ffa94d;color:#ffa94d;cursor:pointer;"
+                                onclick="return confirm('Cancel this session?')">
+                                ⏹ Cancel
+                            </button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('analysis.delete_session', session_id=s.id) }}" style="margin:0;">
+                            <button type="submit" class="action-btn" style="background:rgba(255,107,107,0.12);border-color:#ff6b6b;color:#ff6b6b;cursor:pointer;"
+                                onclick="return confirm('Permanently delete this session record?')">
+                                🗑 Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="empty-state">No analysis sessions yet. Upload a CSV to get started.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}

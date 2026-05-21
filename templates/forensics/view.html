@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}HADES PCAP Viewer{% endblock %}
+{% block page_title %}Forensic Lab : Reconstructed Capture{% endblock %}
+{% block page_subtitle %}High-fidelity stream reconstruction for log #{{ log.id }}{% endblock %}
+
+{% block content %}
+<div class="stats-grid" style="margin-bottom: 20px;">
+    <div class="stat-card">
+        <div class="stat-info">
+            <span class="stat-label">Source IP</span>
+            <span class="stat-value" style="font-size: 1.2rem;">{{ log.source_ip or '192.168.1.100' }}</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-info">
+            <span class="stat-label">Attack Vector</span>
+            <span class="stat-value" style="font-size: 1.2rem; color: var(--red);">{{ log.attack_category }}</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-info">
+            <span class="stat-label">Severity</span>
+            <span class="severity-badge {{ log.severity }}" style="font-size: 1rem;">{{ log.severity|upper }} (CVSS {{ log.severity|cvss }})</span>
+        </div>
+    </div>
+</div>
+
+<div class="charts-row">
+    <!-- Packet Stream -->
+    <div class="table-card" style="flex: 2;">
+        <div class="table-header">
+            <h3>Packet Stream</h3>
+            <span class="table-count">{{ packets|length }} Packets In Stream</span>
+        </div>
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+            <table class="data-table" id="packetTable">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Time</th>
+                        <th>Source</th>
+                        <th>Destination</th>
+                        <th>Proto</th>
+                        <th>Length</th>
+                        <th>Info</th>
+                    </tr>
+                </thead>
+                <tbody style="font-family: var(--font-mono); font-size: 0.75rem;">
+                    {% for p in packets %}
+                    <tr class="packet-row" data-payload="{{ p.payload or '' }}" onclick="selectPacket(this)" style="cursor: pointer;">
+                        <td>{{ loop.index }}</td>
+                        <td>{{ p.time.split('T')[1][:12] }}</td>
+                        <td style="{{ 'color: var(--orange);' if p.src == log.source_ip else '' }}">{{ p.src }}</td>
+                        <td>{{ p.dst }}</td>
+                        <td><span class="proto-badge {{ p.proto|lower }}">{{ p.proto }}</span></td>
+                        <td>{{ p.len }}</td>
+                        <td class="packet-info">{{ p.info }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Packet Details / Hex Viewer -->
+    <div class="chart-card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Payload Inspector</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+        
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div id="hexViewer" style="padding: 15px; flex: 1; background: rgba(0,0,0,0.2); border-radius: 8px; font-family: var(--font-mono); font-size: 0.7rem; color: #88ccaa; overflow-y: auto;">
+            <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">Select a packet to view raw payload</div>
+        </div>
+        <div id="asciiViewer" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); min-height: 100px; word-break: break-all;">
+            <span style="color: var(--text-muted);">ASCII representation...</span>
+        </div>
+    </div>
+</div>
+
+<div class="results-actions" style="margin-top: 25px;">
+    <a href="{{ url_for('forensics.index') }}" class="btn-secondary">← Back to Locker</a>
+    <button class="btn-primary" onclick="window.print()">Print Analysis Report</button>
+</div>
+
+<style>
+.packet-row:hover { background: rgba(64, 138, 113, 0.05); }
+.packet-row.selected { background: rgba(64, 138, 113, 0.15) !important; border-left: 3px solid var(--green); }
+.proto-badge { padding: 2px 4px; border-radius: 3px; font-size: 0.7rem; font-weight: bold; }
+.proto-badge.tcp { background: rgba(116, 192, 252, 0.2); color: #74c0fc; }
+.proto-badge.http { background: rgba(162, 155, 254, 0.2); color: #a29bfe; }
+.proto-badge.ssh { background: rgba(255, 169, 77, 0.2); color: #ffa94d; }
+.packet-info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+
+@media print {
+    .sidebar, .top-bar, .results-actions { display: none; }
+    .main-content { padding: 0; }
+}
+</style>
+
+<script>
+function selectPacket(row) {
+    document.querySelectorAll('.packet-row').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    
+    const payload = row.dataset.payload;
+    const hexDiv = document.getElementById('hexViewer');
+    const asciiDiv = document.getElementById('asciiViewer');
+    
+    if (!payload) {
+        hexDiv.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 50px;">Non-payload packet (Control/Metadata)</div>';
+        asciiDiv.innerHTML = '<span style="color: var(--text-muted);">No ASCII data available for this packet type.</span>';
+        return;
+    }
+    
+    // Format Hex
+    let formattedHex = "";
+    for (let i = 0; i < payload.length; i += 32) {
+        const chunk = payload.substring(i, i + 32);
+        const addr = (i / 2).toString(16).padStart(4, '0');
+        let hexPart = "";
+        for (let j = 0; j < chunk.length; j += 2) {
+            hexPart += chunk.substring(j, j + 2) + " ";
+        }
+        formattedHex += `<div><span style="color: #555;">${addr}</span> &nbsp; ${hexPart.padEnd(48, ' ')}</div>`;
+    }
+    hexDiv.innerHTML = formattedHex;
+    
+    // Format ASCII
+    let ascii = "";
+    for (let i = 0; i < payload.length; i += 2) {
+        const code = parseInt(payload.substring(i, i + 2), 16);
+        ascii += (code >= 32 && code <= 126) ? String.fromCharCode(code) : ".";
+    }
+    asciiDiv.innerHTML = ascii;
+}
+</script>
+{% endblock %}

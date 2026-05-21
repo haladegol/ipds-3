@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}Analysis Results — {{ session.filename }}{% endblock %}
+{% block page_title %}Analysis Results{% endblock %}
+{% block page_subtitle %}{{ session.filename }} · {{ session.upload_time.strftime('%Y-%m-%d %H:%M') }}{% endblock %}
+
+{% block content %}
+{% set summary = results.get('summary', {}) %}
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+        <div class="stat-info"><span class="stat-value">{{ total_packets | default(summary.get('total_flows', session.total_flows), true) | int | format_number }}</span><span class="stat-label">Total Packets in Dataset</span></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="stat-info"><span class="stat-value">{{ summary.get('normal_count', session.normal_count) }}</span><span class="stat-label">Normal Flows</span></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div class="stat-info"><span class="stat-value">{{ summary.get('anomaly_count', session.anomaly_count) }}</span><span class="stat-label">Anomalies Detected</span></div>
+    </div>
+    <div class="stat-card" style="border-color: rgba({% if ips_active %}64,138,113{% else %}162,155,254{% endif %},0.4);">
+        <div class="stat-info">
+            {% if ips_active %}
+                <span class="stat-value" style="color:var(--green-bright);font-size:1rem;">● ENFORCING</span>
+            {% else %}
+                <span class="stat-value" style="color:#a29bfe;font-size:1rem;">○ PASSIVE</span>
+            {% endif %}
+            <span class="stat-label">IPS Engine</span>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- BASIC HEADER FEATURES — Live from File  -->
+<!-- ═══════════════════════════════════════ -->
+<div class="table-card" style="margin-top:28px;">
+    <div class="table-header" style="background:linear-gradient(90deg,rgba(64,138,113,0.12),transparent);border-left:4px solid var(--green-bright);flex-wrap:wrap;gap:12px;">
+        <div>
+            <h3 style="color:var(--green-light);margin:0;display:flex;align-items:center;gap:10px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                Basic Header Features
+            </h3>
+            <p style="margin:4px 0 0;font-size:0.72rem;color:var(--text-muted);">
+                Source/Destination IPs · Port Numbers · Protocol Type · TCP Flag Analysis
+                &nbsp;—&nbsp;showing IP-bearing packets from
+                <strong style="color:var(--green-bright);">{{ '{:,}'.format(total_packets) }}</strong> total dataset packets
+            </p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span id="liveBadge" style="display:none;font-size:0.68rem;padding:3px 10px;border-radius:20px;background:rgba(64,138,113,0.15);border:1px solid rgba(64,138,113,0.3);color:var(--green-bright);">● LIVE</span>
+            <span id="totalCount" style="font-size:0.75rem;color:var(--text-muted);"></span>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table" id="hdrTable">
+            <thead>
+                <tr>
+                    <th style="width:50px;">#</th>
+                    <th style="min-width:200px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            Source / Destination IP
+                        </div>
+                    </th>
+                    <th style="min-width:160px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.06 6.06l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                            Src / Dst Port
+                        </div>
+                    </th>
+                    <th style="min-width:110px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            Protocol
+                        </div>
+                    </th>
+                    <th style="min-width:220px;background:rgba(0,0,0,0.12);">
+                        <div style="display:flex;align-items:center;gap:6px;color:var(--green-bright);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                            TCP Flag Analysis
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="hdrBody">
+                <tr><td colspan="5" style="text-align:center;padding:50px;color:var(--text-muted);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="animation:spin 1.5s linear infinite;display:block;margin:0 auto 14px;opacity:.4;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    Streaming live data from your dataset…
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 20px;border-top:1px solid rgba(64,138,113,0.1);flex-wrap:wrap;gap:8px;">
+        <span id="pageInfo" style="font-size:0.77rem;color:var(--text-muted);"></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <label style="font-size:0.72rem;color:var(--text-muted);">Rows:</label>
+            <select id="perPageSel" onchange="changePerPage(this.value)"
+                style="font-size:0.72rem;padding:3px 8px;border-radius:6px;border:1px solid rgba(64,138,113,0.3);background:rgba(64,138,113,0.07);color:var(--green-bright);cursor:pointer;">
+                <option value="5"  selected>5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+            </select>
+            <button id="prevBtn" onclick="loadPage(curPage-1)" disabled
+                style="padding:5px 15px;border-radius:6px;border:1px solid rgba(64,138,113,0.3);background:rgba(64,138,113,0.07);color:var(--green-bright);cursor:pointer;font-size:0.78rem;">← Prev</button>
+            <button id="nextBtn" onclick="loadPage(curPage+1)" disabled
+                style="padding:5px 15px;border-radius:6px;border:1px solid rgba(64,138,113,0.3);background:rgba(64,138,113,0.07);color:var(--green-bright);cursor:pointer;font-size:0.78rem;">Next →</button>
+        </div>
+    </div>
+</div>
+
+<div class="results-actions" style="margin-top:20px;">
+    <a href="{{ url_for('dashboard.index') }}" class="btn-secondary">← Dashboard</a>
+    <a href="{{ url_for('analysis.upload_page') }}" class="btn-primary">Analyze Another File</a>
+</div>
+
+<style>
+.data-table th { font-size: 0.73rem; text-transform: uppercase; letter-spacing: .05em; }
+.data-table td { font-size: 0.83rem; vertical-align: middle; }
+
+/* Flag badges */
+.fb { display:inline-block; font-size:0.6rem; font-weight:800; color:#fff; padding:2px 6px; border-radius:3px; margin:1px; letter-spacing:.04em; }
+.fb-syn { background:#ff6b6b; }
+.fb-rst { background:#e84393; }
+.fb-fin { background:#4ecdc4; }
+.fb-ack { background:#4ecdc4; }
+.fb-psh { background:#74b9ff; }
+.fb-urg { background:#ffa94d; }
+.fb-cwe, .fb-ece { background:#a29bfe; }
+
+/* Protocol chips */
+.proto-chip { display:inline-block; font-size:0.68rem; font-weight:700; padding:2px 9px; border-radius:4px; border:1px solid; }
+.proto-tcp  { color:#4ecdc4; border-color:rgba(78,205,196,0.3); background:rgba(78,205,196,0.07); }
+.proto-udp  { color:#74b9ff; border-color:rgba(116,185,255,0.3); background:rgba(116,185,255,0.07); }
+.proto-icmp { color:#ffa94d; border-color:rgba(255,169,77,0.3);  background:rgba(255,169,77,0.07); }
+.proto-def  { color:#a29bfe; border-color:rgba(162,155,254,0.3); background:rgba(162,155,254,0.07); }
+
+/* IP cell */
+.ip-cell { display:flex; flex-direction:column; gap:3px; }
+.ip-src  { font-family:'JetBrains Mono',monospace; font-size:0.73rem; color:var(--green-light); }
+.ip-dst  { font-family:'JetBrains Mono',monospace; font-size:0.73rem; color:#a29bfe; }
+.ip-na   { font-size:0.68rem; color:var(--text-muted); font-style:italic; }
+.ip-arr  { color:var(--text-muted); font-size:0.65rem; }
+
+/* Port cell */
+.port-cell { font-family:'JetBrains Mono',monospace; }
+.port-num  { font-weight:700; color:#4ecdc4; font-size:0.8rem; }
+.port-svc  { font-size:0.65rem; color:var(--text-muted); }
+.port-na   { color:var(--text-muted); font-style:italic; font-size:0.72rem; }
+.port-div  { color:var(--text-muted); margin:0 4px; }
+
+/* Flag column */
+.flag-cell { min-width:150px; }
+.flag-none { color:var(--text-muted); font-size:0.7rem; font-style:italic; }
+.flag-note { font-size:0.65rem; color:var(--text-muted); margin-top:4px; }
+
+/* Label */
+.lbl-benign { font-size:0.7rem; font-weight:700; color:var(--green-bright); background:rgba(64,138,113,0.1); padding:2px 8px; border-radius:4px; }
+.lbl-attack { font-size:0.7rem; font-weight:700; color:#ff6b6b; background:rgba(255,107,107,0.1); padding:2px 8px; border-radius:4px; }
+
+@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SESSION_ID = {{ session.id }};
+let curPage = 1, totalPages = 1;
+let perPage = 5;  // default — matches the <select> default option
+
+function changePerPage(n) {
+    perPage = parseInt(n);
+    curPage = 1;
+    loadPage(1);
+}
+
+const PROTO_CHIP = {
+    'TCP':   '<span class="proto-chip proto-tcp">TCP</span>',
+    'UDP':   '<span class="proto-chip proto-udp">UDP</span>',
+    'ICMP':  '<span class="proto-chip proto-icmp">ICMP</span>',
+    'HOPOPT':'<span class="proto-chip proto-def">HOPOPT</span>',
+};
+
+const FLAG_INFO = {
+    SYN: { cls:'fb-syn', tip:'Connection initiation. Many SYNs without ACKs = SYN Flood' },
+    ACK: { cls:'fb-ack', tip:'Acknowledgement of received data' },
+    PSH: { cls:'fb-psh', tip:'Push data immediately to application layer' },
+    RST: { cls:'fb-rst', tip:'Reset connection. Unexpected RSTs = Evasion / Port Scan' },
+    FIN: { cls:'fb-fin', tip:'Graceful connection termination' },
+    URG: { cls:'fb-urg', tip:'Urgent pointer in use' },
+    CWE: { cls:'fb-cwe', tip:'Congestion Window Reduced' },
+    ECE: { cls:'fb-ece', tip:'ECN-Echo (congestion notification)' },
+};
+
+function renderFlags(flags) {
+    if (!flags || flags.length === 0)
+        return '<span class="flag-none">No flags active</span>';
+    const badges = flags.map(f => {
+        const info = FLAG_INFO[f] || { cls:'fb-ack', tip:f };
+        return `<span class="fb ${info.cls}" title="${info.tip}">${f}</span>`;
+    }).join('');
+    return badges;
+}
+
+function renderIP(src, dst, hasIp) {
+    const isRealIP = v => v && /^\d{1,3}(\.\d{1,3}){3}$/.test(v.trim());
+
+    if (src && isRealIP(src)) {
+        const dstHtml = dst && isRealIP(dst)
+            ? `<span class="ip-dst">↓ ${dst}</span>`
+            : `<span class="ip-na">—</span>`;
+        return `<div class="ip-cell"><span class="ip-src">↑ ${src}</span>${dstHtml}</div>`;
+    }
+    if (src) {
+        // Flow ID derived — still show with arrows
+        const dstHtml = dst ? `<span class="ip-dst">↓ ${dst}</span>` : '';
+        return `<div class="ip-cell"><span class="ip-src">↑ ${src}</span>${dstHtml}</div>`;
+    }
+    return `<div class="ip-cell"><span class="ip-na">—</span></div>`;
+}
+
+
+function renderPort(src, dst) {
+    function portCell(p) {
+        if (!p || p === '—') return `<span class="port-na">—</span>`;
+        // e.g. "22 / SSH" or "80 / HTTP" or "12345"
+        const parts = p.split(' / ');
+        const num = parts[0];
+        const svc = parts[1] || '';
+        return `<span class="port-num">${num}</span>${svc ? `<span class="port-svc"> ${svc}</span>` : ''}`;
+    }
+    return `<div class="port-cell">
+        <span style="font-size:0.63rem;color:var(--text-muted);">SRC </span>${portCell(src)}
+        <span class="port-div">→</span>
+        <span style="font-size:0.63rem;color:var(--text-muted);">DST </span>${portCell(dst)}
+    </div>`;
+}
+
+function renderProto(p) {
+    return PROTO_CHIP[p] || `<span class="proto-chip proto-def">${p || '—'}</span>`;
+}
+
+function renderLabel(lbl) {
+    const isOk = lbl.toLowerCase() === 'benign' || lbl.toLowerCase() === 'normal';
+    return `<span class="${isOk ? 'lbl-benign' : 'lbl-attack'}">${lbl}</span>`;
+}
+
+async function loadPage(page) {
+    if (page < 1 || page > totalPages) return;
+    curPage = page;
+    const tbody = document.getElementById('hdrBody');
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:8px;">
+             <path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading…</td></tr>`;
+    document.getElementById('prevBtn').disabled = true;
+    document.getElementById('nextBtn').disabled = true;
+
+    try {
+        const resp = await fetch(`/results/${SESSION_ID}/header-data?page=${page}&per_page=${perPage}`);
+        const data = await resp.json();
+
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:#ff6b6b;">
+                ⚠ ${data.error}<br><pre style="font-size:0.6rem;opacity:.5;text-align:left;overflow:auto;max-height:120px">${data.trace||''}</pre></td></tr>`;
+            return;
+        }
+
+        totalPages = data.pages;
+        const total        = data.total;       // full dataset row count — shown in header
+        const total_rows   = data.total_rows ?? data.total;  // IP-filtered count — used for pagination
+        const from  = (page - 1) * perPage + 1;
+        const to    = Math.min(page * perPage, total_rows);
+
+        document.getElementById('totalCount').textContent = `${total.toLocaleString()} packets`;
+        document.getElementById('pageInfo').textContent   = `Page ${page} of ${totalPages} · Packets ${from}–${to} of ${total_rows.toLocaleString()} shown (${total.toLocaleString()} total in dataset)`;
+
+        const badge = document.getElementById('liveBadge');
+        badge.style.display = 'inline';
+        badge.textContent = data.source === 'live' ? '● LIVE' : '● CACHE';
+        badge.style.color  = data.source === 'live' ? 'var(--green-bright)' : '#ffa94d';
+
+        // Show file type indicator
+        let ftBadge = document.getElementById('fileTypeBadge');
+        if (!ftBadge) {
+            ftBadge = document.createElement('span');
+            ftBadge.id = 'fileTypeBadge';
+            ftBadge.style.cssText = 'font-size:0.68rem;padding:3px 10px;border-radius:20px;margin-left:6px;font-weight:700;';
+            badge.parentNode.appendChild(ftBadge);
+        }
+        if (data.file_type === 'raw') {
+            ftBadge.textContent = 'RAW';
+            ftBadge.style.background = 'rgba(116,185,255,0.15)';
+            ftBadge.style.border = '1px solid rgba(116,185,255,0.4)';
+            ftBadge.style.color = '#74b9ff';
+        } else {
+            ftBadge.textContent = 'PREPROCESSED';
+            ftBadge.style.background = 'rgba(255,169,77,0.12)';
+            ftBadge.style.border = '1px solid rgba(255,169,77,0.3)';
+            ftBadge.style.color = '#ffa94d';
+        }
+
+        if (!data.rows || data.rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);">No data on this page.</td></tr>`;
+            return;
+        }
+
+        const hasIp = data.has_ip;
+        tbody.innerHTML = data.rows.map(r => `
+            <tr>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:0.66rem;color:var(--text-muted);">${r.row_num}</td>
+                <td>${renderIP(r.src_ip, r.dst_ip, hasIp)}</td>
+                <td>${renderPort(r.src_port, r.dst_port)}</td>
+                <td>${renderProto(r.protocol)}</td>
+                <td class="flag-cell" style="background:rgba(0,0,0,0.05);">
+                    <div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;">
+                        ${renderFlags(r.flags)}
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+
+        document.getElementById('prevBtn').disabled = (page <= 1);
+        document.getElementById('nextBtn').disabled = (page >= totalPages);
+
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:#ff6b6b;">Failed: ${e}</td></tr>`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => loadPage(1));
+</script>
+{% endblock %}

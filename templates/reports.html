@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports & Session History{% endblock %}
+{% block page_subtitle %}View and export analysis reports{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ total_sessions }}</span>
+            <span class="stat-label">Total Sessions</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ completed }}</span>
+            <span class="stat-label">Completed</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ failed }}</span>
+            <span class="stat-label">Failed</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ "{:,}".format(total_flows) }}</span>
+            <span class="stat-label">Total Flows Processed</span>
+        </div>
+    </div>
+</div>
+
+<!-- Severity Summary Row -->
+{% if severity_counts %}
+<div class="severity-summary-row">
+    {% for sev in ['critical', 'high', 'medium', 'low', 'info'] %}
+    <div class="sev-summary-item {{ sev }}">
+        <span class="sev-count">{{ severity_counts.get(sev, 0) }}</span>
+        <span class="sev-label">{{ sev|upper }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Session History Table -->
+<div class="table-card">
+    <div class="table-header">
+        <h3>Analysis Sessions</h3>
+        <div class="header-actions">
+            <a href="{{ url_for('analysis.upload_page') }}" class="action-btn">+ New Analysis</a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Upload Time</th>
+                    <th>Filename</th>
+                    <th>Total Flows</th>
+                    <th>Normal</th>
+                    <th>Anomalies</th>
+                    <th>Anomaly %</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions.items %}
+                <tr>
+                    <td><code>#{{ s.id }}</code></td>
+                    <td class="td-time">{{ s.upload_time.strftime('%Y-%m-%d %H:%M:%S') if s.upload_time else 'N/A' }}</td>
+                    <td class="td-file">{{ s.filename }}</td>
+                    <td>{{ "{:,}".format(s.total_flows) if s.total_flows else '—' }}</td>
+                    <td class="td-normal">{{ "{:,}".format(s.normal_count) if s.normal_count else '—' }}</td>
+                    <td class="td-anomaly">{{ "{:,}".format(s.anomaly_count) if s.anomaly_count else '—' }}</td>
+                    <td>
+                        {% if s.total_flows and s.total_flows > 0 %}
+                        <span class="severity-badge {{ 'critical' if (s.anomaly_count or 0) / s.total_flows * 100 > 30 else 'medium' if (s.anomaly_count or 0) / s.total_flows * 100 > 15 else 'low' }}">
+                            {{ ((s.anomaly_count or 0) / s.total_flows * 100)|round(1) }}%
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td><span class="status-badge {{ s.status }}">{{ s.status|upper }}</span></td>
+                    <td>
+                        {% if s.status == 'completed' %}
+                        <a href="{{ url_for('analysis.results', session_id=s.id) }}" class="action-btn">View</a>
+                        <a href="{{ url_for('analysis.print_report', session_id=s.id) }}" class="action-btn" target="_blank" style="background: rgba(64, 197, 113, 0.1); border-color: #40c571; color: #40c571;">Export</a>
+                        {% elif s.status == 'failed' %}
+                        <span class="action-disabled">Failed</span>
+                        {% else %}
+                        <span class="action-disabled">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="empty-state">No analysis sessions yet. Upload a traffic file to get started.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if sessions.pages > 1 %}
+    <div class="pagination-bar">
+        <span class="page-info">Page {{ sessions.page }} of {{ sessions.pages }} ({{ sessions.total }} total)</span>
+        <div class="page-controls">
+            {% if sessions.has_prev %}
+            <a href="{{ url_for('reports.index', page=sessions.prev_num) }}" class="page-btn">&laquo; Prev</a>
+            {% endif %}
+            {% for p in sessions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                <a href="{{ url_for('reports.index', page=p) }}" class="page-btn {{ 'active' if p == sessions.page else '' }}">{{ p }}</a>
+                {% else %}
+                <span class="page-dots">...</span>
+                {% endif %}
+            {% endfor %}
+            {% if sessions.has_next %}
+            <a href="{{ url_for('reports.index', page=sessions.next_num) }}" class="page-btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

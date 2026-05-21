@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+{% block title %}Network Architecture & Topology{% endblock %}
+{% block head %}
+<style>
+    /* Premium CSS animations and states for logical mesh topology */
+    .mesh-link {
+        stroke: rgba(64, 138, 113, 0.05); /* Softer base stroke for dense full-mesh */
+        stroke-width: 0.8px;
+        transition: stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease;
+    }
+    .mesh-link.active-flow {
+        stroke: var(--green-bright);
+        stroke-width: 1.5px;
+        stroke-dasharray: 4, 4;
+        animation: meshPulse 1.5s linear infinite;
+        opacity: 0.9;
+    }
+    .mesh-link.dimmed {
+        stroke: rgba(64, 138, 113, 0.01);
+        stroke-width: 0.4px;
+        opacity: 0.1;
+    }
+    .mesh-node {
+        cursor: pointer;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), r 0.3s cubic-bezier(0.4, 0, 0.2, 1), fill 0.3s ease, filter 0.3s ease, opacity 0.3s ease;
+    }
+    .mesh-node:hover {
+        filter: drop-shadow(0 0 10px var(--green-bright));
+    }
+    .mesh-node.dimmed {
+        opacity: 0.25;
+    }
+    @keyframes meshPulse {
+        from { stroke-dashoffset: 20; }
+        to { stroke-dashoffset: 0; }
+    }
+</style>
+{% endblock %}
+{% block page_title %}Network Infrastructure Intelligence{% endblock %}
+{% block page_subtitle %}
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Intelligence for: <strong style="color:var(--green-bright);">{{ current_session_name }}</strong></span>
+        <div class="session-selector">
+            <form action="{{ url_for('network.index') }}" method="GET" id="sessionForm">
+                <select name="session_id" onchange="document.getElementById('sessionForm').submit()" style="background:rgba(9,20,19,0.9); border:1px solid var(--green-bright); color:var(--text-primary); padding:8px 16px; border-radius:8px; font-size:0.85rem; cursor:pointer; font-family:inherit; outline:none; box-shadow:0 0 15px rgba(64,138,113,0.1);">
+                    {% for s in sessions %}
+                    <option value="{{ s.id }}" {% if s.id == current_session_id %}selected{% endif %}>
+                        {{ s.filename }} ({{ s.upload_time.strftime('%b %d, %H:%M') }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+
+{% if not total_flows %}
+<div class="table-card" style="padding: 60px 20px; text-align: center; background: rgba(64,138,113,0.02); border: 1px dashed rgba(64,138,113,0.2);">
+    <div style="font-size: 3rem; margin-bottom: 20px;">🕸️</div>
+    <h2 style="color: var(--text-primary); margin-bottom: 10px;">No Topology Data</h2>
+    <p style="color: var(--text-muted); max-width: 500px; margin: 0 auto 24px;">Please analyze a flow dataset to reconstruct the network architecture and discover active devices.</p>
+    <a href="{{ url_for('analysis.upload_page') }}" class="view-all-btn" style="display: inline-block; padding: 10px 24px; background: var(--green-bright); color: #000; font-weight: 700; border-radius: 8px;">Start Analysis &rarr;</a>
+</div>
+{% else %}
+
+<!-- KPI Row -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ client_count }}</span>
+            <span class="stat-label">Network Clients</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6" y2="6"/><line x1="6" y1="18" x2="6" y2="18"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ host_count }}</span>
+            <span class="stat-label">Network Hosts</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ architecture.type }}</span>
+            <span class="stat-label">Network Architecture</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ encryption.type }}</span>
+            <span class="stat-label">Encryption Profile</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ connection.type }}</span>
+            <span class="stat-label">Connection Type</span>
+        </div>
+    </div>
+</div>
+
+<div class="charts-row">
+    <!-- Network Topology Graph (SVG) -->
+    <div class="chart-card" style="flex: 2;">
+        <div class="chart-header">
+            <h3>Logical Topology — Mesh Infrastructure</h3>
+            <div class="chart-badge">Distributed Analysis</div>
+        </div>
+        <div class="chart-body" id="topologyContainer" style="height:450px; background:radial-gradient(circle, rgba(64,138,113,0.05) 0%, rgba(9,20,19,1) 100%); position:relative; overflow:hidden;">
+            <svg id="topologySvg" width="100%" height="100%" viewBox="0 0 800 500">
+                <defs>
+                    <marker id="arrow" markerWidth="10" markerHeight="10" refX="15" refY="3" orient="auto" markerUnits="strokeWidth">
+                        <path d="M0,0 L0,6 L9,3 z" fill="rgba(255,255,255,0.2)" />
+                    </marker>
+                    <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                <g id="linksGroup"></g>
+                <g id="nodesGroup"></g>
+            </svg>
+            <div id="nodeInfo" style="position:absolute; bottom:15px; left:15px; background:rgba(0,0,0,0.9); border:1px solid var(--green-bright); padding:15px; border-radius:10px; font-size:0.8rem; display:none; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                <div style="font-size:0.6rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Mesh Identity</div>
+                <div id="infoIp" style="font-weight:800; color:var(--green-bright); font-size:1.1rem; font-family:'JetBrains Mono',monospace;"></div>
+                <div id="infoType" style="color:#fff; margin-top:5px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="charts-row">
+    <!-- TCP Flags Analysis -->
+    <div class="chart-card wide">
+        <div class="chart-header">
+            <h3>Protocol Behavior — Behavioral Fingerprinting</h3>
+            <div class="chart-badge">Full Dataset Scan</div>
+        </div>
+        <div class="chart-body" style="height:250px;">
+            <canvas id="flagChart"></canvas>
+        </div>
+    </div>
+</div>
+
+    <!-- Full-Width Detailed Device Inventory -->
+    <div class="table-card" style="margin-top: 35px; width: 100%; border: 1px solid var(--green-bright); box-shadow: 0 0 30px rgba(64,138,113,0.1);">
+        <div class="card-header" style="background: #000; border-bottom: 2px solid var(--green-bright); padding: 25px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="background: var(--green-bright); width: 6px; height: 24px; border-radius: 3px; box-shadow: 0 0 10px var(--green-bright);"></div>
+                    <h3 style="margin: 0; font-size: 1.4rem; letter-spacing: 1px; color: #fff; text-transform: uppercase;">Forensic Device Inventory Matrix</h3>
+                </div>
+                <span class="badge" style="background: var(--green-bright); color: #000; font-weight: 800; padding: 6px 15px; border-radius: 5px; font-size: 0.85rem;">
+                    {{ host_count|format }} TOTAL HOSTS ANALYZED
+                </span>
+            </div>
+        </div>
+        <div class="table-container" style="overflow-x: auto; background: #0c1a18;">
+            <table style="width: 100%; border-collapse: collapse; min-width: 1000px;">
+                <thead style="background: #000;">
+                    <tr>
+                        <th style="padding: 22px 25px; text-align: left; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">IP Address</th>
+                        <th style="padding: 22px 25px; text-align: left; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">Version</th>
+                        <th style="padding: 22px 25px; text-align: left; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">Forensic Role</th>
+                        <th style="padding: 22px 25px; text-align: left; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">Protocols</th>
+                        <th style="padding: 22px 25px; text-align: left; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">Active Ports</th>
+                        <th style="padding: 22px 25px; text-align: left; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">Inferred Services</th>
+                        <th style="padding: 22px 25px; text-align: right; font-size: 1rem; color: #fff; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid rgba(64,138,113,0.5);">Traffic Density</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dev in device_list %}
+                    <tr style="background: {% if loop.index0 % 2 == 0 %}#0c1a18{% else %}#0e1f1d{% endif %}; border-bottom: 1px solid rgba(64,138,113,0.2); transition: all 0.2s;">
+                        <td style="padding: 28px 25px; font-family: 'JetBrains Mono', monospace; font-size: 1.25rem; font-weight: 800; color: #fff; text-shadow: 0 0 10px rgba(64,138,113,0.2);">
+                            {{ dev.ip }}
+                        </td>
+                        <td style="padding: 28px 25px;">
+                            <span style="padding: 6px 12px; background: #000; border: 1px solid #fff; border-radius: 4px; font-size: 0.8rem; font-weight: 900; color: #fff;">{{ dev.version }}</span>
+                        </td>
+                        <td style="padding: 28px 25px;">
+                            <span style="display:inline-block; padding: 10px 18px; border-radius: 4px; font-size: 0.9rem; font-weight: 900; letter-spacing: 1.5px; border: 2px solid currentColor;
+                                {% if dev.role == 'Client & Host' %}background: rgba(162, 155, 254, 0.2); color: #a29bfe;
+                                {% elif dev.role == 'Client' %}background: rgba(116, 192, 252, 0.2); color: #74c0fc;
+                                {% else %}background: rgba(255, 123, 172, 0.2); color: #f783ac;{% endif %}">
+                                {{ dev.role|upper }}
+                            </span>
+                        </td>
+                        <td style="padding: 28px 25px;">
+                            <div style="display:flex; gap:12px; flex-wrap: wrap;">
+                                {% for p in dev.protocols.split(', ') %}
+                                <span style="font-size: 0.85rem; color: #fff; background: #000; border: 1px solid var(--green-bright); padding: 5px 12px; border-radius: 4px; font-weight: 800;">{{ p }}</span>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td style="padding: 28px 25px;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; color: #fff; font-weight: 800; background: #000; padding: 8px 15px; border-radius: 6px; border: 1px solid rgba(64,138,113,0.5);">
+                                {{ dev.ports }}
+                            </div>
+                        </td>
+                        <td style="padding: 28px 25px;">
+                            <div style="font-size: 1.2rem; font-weight: 800; color: var(--green-bright);">
+                                {{ dev.services }}
+                            </div>
+                        </td>
+                        <td style="padding: 28px 25px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 1.25rem; color: #fff; font-weight: 900;">
+                            {{ "{:,}".format(dev.flows) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    {% if total_flows %}
+    const COLORS = {
+        blue: '#74c0fc', orange: '#ffa94d', red: '#ff6b6b', muted: '#4a5568',
+        green: '#408A71', purple: '#a29bfe', pink: '#f783ac', yellow: '#ffd43b'
+    };
+    Chart.defaults.color = '#e2e8f0';
+
+    // 1. Authentically Interconnected P2P Mesh Topology Diagram
+    const nodes = {{ topology_nodes|tojson }};
+    const svg = document.getElementById('topologySvg');
+    const nodesGroup = document.getElementById('nodesGroup');
+    const linksGroup = document.getElementById('linksGroup');
+    const nodeInfo = document.getElementById('nodeInfo');
+
+    const width = 800; const height = 500;
+    const CX = width / 2;
+    const CY = height / 2;
+
+    // Golden Spiral layout for a balanced, organic, and deterministic P2P distribution
+    nodes.forEach((node, idx) => {
+        const phi = idx * 137.5 * (Math.PI / 180); // Golden angle
+        const r = 25 + Math.sqrt(idx) * 29;        // Concentric organic scaling
+        node.x = CX + r * Math.cos(phi);
+        node.y = CY + r * Math.sin(phi);
+    });
+
+    const links = [];
+
+    // Mathematically establish a perfect Full Mesh Topology by connecting every single node to every other node in the network
+    for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+            links.push({ source: nodes[i], target: nodes[j] });
+        }
+    }
+
+    // Draw mesh links on the SVG with animated flowing traffic
+    links.forEach((link, idx) => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", link.source.x);
+        line.setAttribute("y1", link.source.y);
+        line.setAttribute("x2", link.target.x);
+        line.setAttribute("y2", link.target.y);
+        line.setAttribute("class", "mesh-link");
+        line.setAttribute("data-src", link.source.ip);
+        line.setAttribute("data-dst", link.target.ip);
+        
+        // Initially trigger flowing state for some links to represent active background traffic
+        if (idx % 3 === 0) {
+            line.classList.add('active-flow');
+        }
+        
+        linksGroup.appendChild(line);
+    });
+
+    // Draw the nodes
+    nodes.forEach(node => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", node.x);
+        circle.setAttribute("cy", node.y);
+        circle.setAttribute("r", node.type === 'Server' ? 8.5 : 6.5);
+        circle.setAttribute("fill", node.type === 'Server' ? '#ff6b6b' : '#329af0');
+        circle.setAttribute("stroke", "#091413");
+        circle.setAttribute("stroke-width", "1.5");
+        circle.setAttribute("class", "mesh-node");
+        circle.setAttribute("data-ip", node.ip);
+
+        circle.addEventListener('mouseenter', () => {
+            nodeInfo.style.display = 'block';
+            document.getElementById('infoIp').innerText = node.ip;
+            document.getElementById('infoType').innerText = `${node.type} Node | ${node.flows.toLocaleString()} Flows Detected`;
+            circle.setAttribute("r", node.type === 'Server' ? 11.5 : 9.5);
+            circle.setAttribute("fill", "#fff");
+            highlightConnected(node.ip);
+        });
+        circle.addEventListener('mouseleave', () => {
+            circle.setAttribute("r", node.type === 'Server' ? 8.5 : 6.5);
+            circle.setAttribute("fill", node.type === 'Server' ? '#ff6b6b' : '#329af0');
+            resetHighlight();
+        });
+        nodesGroup.appendChild(circle);
+    });
+
+    // Hover-based path tracing for logical mesh discovery
+    function highlightConnected(ip) {
+        const lines = document.querySelectorAll('.mesh-link');
+        lines.forEach(line => {
+            const src = line.getAttribute('data-src');
+            const dst = line.getAttribute('data-dst');
+            if (src === ip || dst === ip) {
+                line.classList.add('active-flow');
+                line.classList.remove('dimmed');
+            } else {
+                line.classList.add('dimmed');
+                line.classList.remove('active-flow');
+            }
+        });
+
+        const circles = document.querySelectorAll('.mesh-node');
+        circles.forEach(circle => {
+            const nodeIp = circle.getAttribute('data-ip');
+            if (nodeIp === ip) {
+                circle.classList.remove('dimmed');
+            } else {
+                let connected = false;
+                links.forEach(l => {
+                    if ((l.source.ip === ip && l.target.ip === nodeIp) ||
+                        (l.target.ip === ip && l.source.ip === nodeIp)) {
+                        connected = true;
+                    }
+                });
+                if (connected) {
+                    circle.classList.remove('dimmed');
+                } else {
+                    circle.classList.add('dimmed');
+                }
+            }
+        });
+    }
+
+    // Reset layout elements to default states
+    function resetHighlight() {
+        const lines = document.querySelectorAll('.mesh-link');
+        lines.forEach((line, idx) => {
+            line.classList.remove('dimmed');
+            if (idx % 3 === 0) {
+                line.classList.add('active-flow');
+            } else {
+                line.classList.remove('active-flow');
+            }
+        });
+
+        const circles = document.querySelectorAll('.mesh-node');
+        circles.forEach(circle => {
+            circle.classList.remove('dimmed');
+        });
+    }
+
+    // 4. Flag Chart
+    const flagData = {{ flag_stats|tojson }};
+    new Chart(document.getElementById('flagChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(flagData),
+            datasets: [{ data: Object.values(flagData), backgroundColor: [COLORS.blue, COLORS.green, COLORS.yellow, COLORS.orange, COLORS.red, COLORS.purple], borderRadius: 5 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+    });
+    {% endif %}
+})();
+</script>
+{% endblock %}

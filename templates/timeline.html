@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Alert Timeline{% endblock %}
+{% block page_title %}Alert Timeline{% endblock %}
+{% block page_subtitle %}Chronological view of detected threats{% endblock %}
+
+{% block content %}
+<div class="timeline-filters">
+    <form method="GET" action="{{ url_for('timeline.index') }}" class="timeline-filter-form">
+        <select name="session_id" class="live-select" style="min-width: 200px;">
+            <option value="all" {{ 'selected' if current_session_id == 'all' or not current_session_id }}>All Uploaded Files</option>
+            {% for s in sessions %}
+            <option value="{{ s.id }}" {{ 'selected' if current_session_id == s.id|string }}>{{ s.filename }}</option>
+            {% endfor %}
+        </select>
+        <select name="severity" class="live-select">
+            <option value="">All Severities</option>
+            <option value="critical" {{ 'selected' if current_severity == 'critical' }}>Critical</option>
+            <option value="high" {{ 'selected' if current_severity == 'high' }}>High</option>
+            <option value="medium" {{ 'selected' if current_severity == 'medium' }}>Medium</option>
+            <option value="low" {{ 'selected' if current_severity == 'low' }}>Low</option>
+        </select>
+        <select name="category" class="live-select">
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}" {{ 'selected' if current_category == cat }}>{{ cat }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="date_from" value="{{ date_from or '' }}" class="live-select">
+        <input type="date" name="date_to" value="{{ date_to or '' }}" class="live-select">
+        <button type="submit" class="response-btn primary" style="padding:8px 16px;">Filter</button>
+        <a href="{{ url_for('timeline.index') }}" class="action-btn">Reset</a>
+    </form>
+</div>
+
+<div class="stats-grid" style="margin-bottom:24px;">
+    <div class="stat-card"><div class="stat-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-info"><span class="stat-value">{{ total_events }}</span><span class="stat-label">Total Events</span></div></div>
+    <div class="stat-card"><div class="stat-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div><div class="stat-info"><span class="stat-value">{{ severity_counts.get('critical', 0) }}</span><span class="stat-label">Critical</span></div></div>
+    <div class="stat-card"><div class="stat-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div><div class="stat-info"><span class="stat-value">{{ severity_counts.get('high', 0) }}</span><span class="stat-label">High</span></div></div>
+    <div class="stat-card"><div class="stat-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="stat-info"><span class="stat-value">{{ grouped|length }}</span><span class="stat-label">Days Affected</span></div></div>
+</div>
+
+<div class="timeline-container">
+    {% for date, day_events in grouped.items() %}
+    <div class="timeline-date-group">
+        <div class="timeline-date-header">
+            <div class="timeline-date-badge">{{ date }}</div>
+            <span class="timeline-date-count">{{ day_events|length }} events</span>
+        </div>
+        <div class="timeline-events">
+            {% for event in day_events %}
+            <div class="timeline-event" style="animation-delay:{{ loop.index * 0.05 }}s;">
+                <div class="timeline-dot {{ event.severity }}"></div>
+                <div class="timeline-line"></div>
+                <div class="timeline-card">
+                    <div class="timeline-card-header">
+                        <div><span class="severity-badge {{ event.severity }}">{{ event.severity|upper }} (CVSS {{ event.severity|cvss }})</span> <strong>{{ event.specific or event.category }}</strong></div>
+                        <span class="timeline-card-time">{{ event.time }}</span>
+                    </div>
+                    <div class="timeline-card-body">
+                        <span class="category-badge {{ event.category|lower|replace('+','') }}">{{ event.category }}</span>
+                        <span style="color:var(--text-muted);font-size:0.8rem;">{{ event.source_ip }} → {{ event.dest_ip }}</span>
+                    </div>
+                    <div class="timeline-card-footer">
+                        <span style="color:var(--text-muted);font-size:0.75rem;">{{ event.filename }}</span>
+                        <a href="{{ url_for('incidents.detail', log_id=event.id) }}" class="action-btn" style="font-size:0.7rem;">Details →</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% if not events %}
+    <div class="table-card" style="text-align:center;padding:60px 32px;">
+        <h3 style="color:var(--text-secondary);">No Events Found</h3>
+        <p style="color:var(--text-muted);">Try adjusting your filters or upload a traffic file.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

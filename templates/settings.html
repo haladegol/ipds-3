@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Configure your IDS preferences{% endblock %}
+
+{% block content %}
+<div class="settings-tabs">
+    <button class="settings-tab active" onclick="switchTab('general')" id="tab-general">General</button>
+    <button class="settings-tab" onclick="switchTab('ips')" id="tab-ips">🛡️ IPS Enforcement</button>
+    <button class="settings-tab" onclick="switchTab('security')" id="tab-security">Security</button>
+    <button class="settings-tab" onclick="switchTab('notifications')" id="tab-notifications">Notifications</button>
+</div>
+
+<!-- General Tab -->
+<div class="settings-panel" id="panel-general">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>⚙️ General Settings</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding:24px;">
+            <form method="POST" action="{{ url_for('settings.update') }}" class="response-form">
+                <input type="hidden" name="tab" value="general">
+                <div class="form-group">
+                    <label>Minimum Severity Threshold</label>
+                    <select name="severity_threshold" class="response-input">
+                        <option value="low" {{ 'selected' if config.severity_threshold == 'low' }}>Low (show all alerts)</option>
+                        <option value="medium" {{ 'selected' if config.severity_threshold == 'medium' }}>Medium</option>
+                        <option value="high" {{ 'selected' if config.severity_threshold == 'high' }}>High</option>
+                        <option value="critical" {{ 'selected' if config.severity_threshold == 'critical' }}>Critical only</option>
+                    </select>
+                    <span class="form-hint">Only alerts at or above this level will trigger notifications</span>
+                </div>
+                <div class="form-group">
+                    <label>Items Per Page</label>
+                    <select name="items_per_page" class="response-input">
+                        <option value="10" {{ 'selected' if config.items_per_page == 10 }}>10</option>
+                        <option value="20" {{ 'selected' if config.items_per_page == 20 }}>20</option>
+                        <option value="50" {{ 'selected' if config.items_per_page == 50 }}>50</option>
+                        <option value="100" {{ 'selected' if config.items_per_page == 100 }}>100</option>
+                    </select>
+                </div>
+                <div class="form-group" style="background: rgba(64,138,113, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(64,138,113, 0.1); margin-bottom: 20px;">
+                    <label style="font-weight: 700; color: var(--green-light); margin-bottom: 12px; display: block;">🛡️ Operations Tier</label>
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <label class="toggle-label" style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; padding: 10px; border-radius: 8px; transition: all 0.3s ease; border: 1px solid transparent;" onmouseover="this.style.background='rgba(64,138,113,0.08)'" onmouseout="this.style.background='transparent'">
+                            <input type="radio" name="ops_mode" value="passive" {{ 'checked' if not config.ips_mode_enabled }} style="width:18px; height:18px; margin-top:2px;">
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 600; color: var(--text-secondary);">Passive (IDS Mode)</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">Monitor and generate alerts only. Takes absolutely zero prevention actions.</span>
+                            </div>
+                        </label>
+                        <label class="toggle-label" style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; padding: 10px; border-radius: 8px; transition: all 0.3s ease; border: 1px solid rgba(255,169,77,0.2); background: rgba(255,169,77,0.05);" onmouseover="this.style.background='rgba(255,169,77,0.1)'" onmouseout="this.style.background='rgba(255,169,77,0.05)'">
+                            <input type="radio" name="ops_mode" value="hybrid" {{ 'checked' if config.ips_mode_enabled and config.auto_block_critical }} style="width:18px; height:18px; margin-top:2px;">
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 600; color: var(--orange);">Hybrid (Selective IPS)</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">Automatically blocks <b>Critical</b> severity threats. High anomalies are logged for manual review. (Recommended)</span>
+                            </div>
+                        </label>
+                        <label class="toggle-label" style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; padding: 10px; border-radius: 8px; transition: all 0.3s ease; border: 1px solid rgba(255,107,107,0.15); background: rgba(255,107,107,0.05);" onmouseover="this.style.background='rgba(255,107,107,0.1)'" onmouseout="this.style.background='rgba(255,107,107,0.05)'">
+                            <input type="radio" name="ops_mode" value="active" {{ 'checked' if config.ips_mode_enabled and not config.auto_block_critical }} style="width:18px; height:18px; margin-top:2px;">
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 600; color: var(--red);">Active (Strict IPS)</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">Zero-trust approach. Automatically mitigates and blocks ALL High and Critical threats instantly.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="response-btn primary">Save General Settings</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- IPS Tab -->
+<div class="settings-panel" id="panel-ips" style="display:none;">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🛡️ Advanced Enforcement Layer</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding:24px;">
+            <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 0.9rem;">
+                Configure the deep inspection and active response logic of the HADES Hybrid engine.
+            </p>
+            <form method="POST" action="{{ url_for('settings.update') }}" class="response-form">
+                <input type="hidden" name="tab" value="ips">
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 30px; margin-bottom: 30px;">
+                    <!-- Intelligence Core (Tier 2) -->
+                    <div>
+                        <h4 style="color: var(--green-light); margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px;">🧬 Intelligence Core (Tier 2)</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_signature_matching" {{ 'checked' if config.ips_signature_matching }}>
+                                <div>
+                                    <span class="label-primary">Signature Matching</span>
+                                    <span class="label-hint">PCRE regex matching for known attack strings.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_anomaly_detection" {{ 'checked' if config.ips_anomaly_detection }}>
+                                <div>
+                                    <span class="label-primary">Behavioral Engine</span>
+                                    <span class="label-hint">ML-driven anomaly detection (HADES AI).</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_protocol_normalization" {{ 'checked' if config.ips_protocol_normalization }}>
+                                <div>
+                                    <span class="label-primary">Traffic Normalization</span>
+                                    <span class="label-hint">De-obfuscate URL/Hex encoded payloads.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_protocol_analysis" {{ 'checked' if config.ips_protocol_analysis }}>
+                                <div>
+                                    <span class="label-primary">Protocol Anomaly Check</span>
+                                    <span class="label-hint">Verify port/protocol RFC compliance.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Analysis (Tier 3) -->
+                    <div>
+                        <h4 style="color: var(--orange); margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px;">🌀 Advanced Analysis (Tier 3)</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_reputation_check" {{ 'checked' if config.ips_reputation_check }}>
+                                <div>
+                                    <span class="label-primary">IP Reputation Lookup</span>
+                                    <span class="label-hint">Check against Tor/C2/Botnet blocklists.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_stream_reassembly" {{ 'checked' if config.ips_stream_reassembly }}>
+                                <div style="flex:1;">
+                                    <span class="label-primary">TCP Stream Reassembly</span>
+                                    <span class="label-hint">Stitch fragmented packets into sessions.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_file_hashing" {{ 'checked' if config.ips_file_hashing }}>
+                                <div style="flex:1;">
+                                    <span class="label-primary">File Hashing (SHA256)</span>
+                                    <span class="label-hint">Extract and hash payload files for analysis.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- High-Intelligence Overlays (Tier 4) -->
+                    <div>
+                        <h4 style="color: #a29bfe; margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid rgba(162,155,254,0.1); padding-bottom: 5px;">🧠 High-Intelligence Overlays (Tier 4)</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_geoip_filtering" {{ 'checked' if config.ips_geoip_filtering }}>
+                                <div style="flex:1;">
+                                    <span class="label-primary">Geo-IP Policy Enforcement</span>
+                                    <span class="label-hint">Block traffic from high-risk regions.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_honeypot_routing" {{ 'checked' if config.ips_honeypot_routing }}>
+                                <div style="flex:1;">
+                                    <span class="label-primary">Adversary Honeypot Routing</span>
+                                    <span class="label-hint">Steer detected attackers to isolation.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_ddos_protection" {{ 'checked' if config.ips_ddos_protection }}>
+                                <div style="flex:1;">
+                                    <span class="label-primary">DDoS Defeat Mitigation</span>
+                                    <span class="label-hint">Advanced protection against flood attacks.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Operations & Stability -->
+                    <div>
+                        <h4 style="color: var(--red); margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px;">⚙️ Operational Stability</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <label class="toggle-label-advanced" style="border: 1px solid rgba(255,107,107,0.2); background: rgba(255,107,107,0.03);">
+                                <input type="checkbox" name="ips_bypass_mode" {{ 'checked' if config.ips_bypass_mode }}>
+                                <div>
+                                    <span class="label-primary" style="color: var(--red);">Fail-Open (Bypass)</span>
+                                    <span class="label-hint">TAP Mode: Disable prevention if engine fails.</span>
+                                </div>
+                            </label>
+                            <label class="toggle-label-advanced">
+                                <input type="checkbox" name="ips_json_logging" {{ 'checked' if config.ips_json_logging }}>
+                                <div>
+                                    <span class="label-primary">Structured JSON Logs</span>
+                                    <span class="label-hint">SIEM-ready output to ips_signals.json.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <style>
+                .toggle-label-advanced {
+                    display: flex; align-items: flex-start; gap: 12px; cursor: pointer; padding: 12px; 
+                    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); 
+                    border-radius: 8px; transition: all 0.2s ease;
+                }
+                .toggle-label-advanced:hover { background: rgba(255,255,255,0.05); }
+                .label-primary { font-weight: 600; display: block; font-size: 0.85rem; color: var(--text-primary); }
+                .label-hint { font-size: 0.7rem; color: var(--text-muted); }
+                input[type="checkbox"] { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--green); }
+                </style>
+
+                <div style="background: rgba(64,138,113,0.1); border-left: 4px solid var(--orange); padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                    <span style="font-weight: 700; color: var(--orange); display: block; margin-bottom: 5px;">⚠️ Operational Note</span>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">Promiscuous mode allows the engine to alert without blocking, ensuring maximum network uptime during tuning.</span>
+                </div>
+
+                <button type="submit" class="response-btn primary">Save Advanced IPS Config</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Security Tab -->
+<div class="settings-panel" id="panel-security" style="display:none;">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🔒 Security — Change Password</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding:24px;">
+            <form method="POST" action="{{ url_for('settings.update') }}" class="response-form">
+                <input type="hidden" name="tab" value="security">
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" name="current_password" required class="response-input" placeholder="Enter current password">
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" name="new_password" required class="response-input" minlength="6" placeholder="Enter new password (min 6 chars)">
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" name="confirm_password" required class="response-input" placeholder="Confirm new password">
+                </div>
+                <button type="submit" class="response-btn primary">Update Password</button>
+            </form>
+        </div>
+    </div>
+    <div class="chart-card" style="margin-top:20px;">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>👤 Account Info</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding:24px;">
+            <div class="settings-info-grid">
+                <div class="settings-info-item"><span class="settings-info-label">Username</span><span>{{ current_user.username }}</span></div>
+                <div class="settings-info-item"><span class="settings-info-label">Email</span><span>{{ current_user.email }}</span></div>
+                <div class="settings-info-item"><span class="settings-info-label">Role</span><span class="severity-badge {{ 'critical' if current_user.is_admin else 'low' }}">{{ 'ADMIN' if current_user.is_admin else 'ANALYST' }}</span></div>
+                <div class="settings-info-item"><span class="settings-info-label">Member Since</span><span>{{ current_user.created_at.strftime('%Y-%m-%d') if current_user.created_at else 'N/A' }}</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notifications Tab -->
+<div class="settings-panel" id="panel-notifications" style="display:none;">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🔔 Notification Settings</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding:24px;">
+            <form method="POST" action="{{ url_for('settings.update') }}" class="response-form">
+                <input type="hidden" name="tab" value="notifications">
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" name="email_notifications" {{ 'checked' if config.email_notifications }}>
+                        <span class="toggle-text">Email notifications for critical alerts</span>
+                    </label>
+                    <span class="form-hint">Sends an email when a critical severity threat is detected</span>
+                </div>
+                <button type="submit" class="response-btn primary">Save Notification Settings</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchTab(name) {
+    document.querySelectorAll('.settings-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('panel-' + name).style.display = 'block';
+    document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+{% endblock %}

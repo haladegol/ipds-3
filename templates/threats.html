@@ -1,0 +1,787 @@
+{% extends "base.html" %}
+{% block title %}Threat Intelligence{% endblock %}
+{% block extra_head %}
+<style>
+    /* Dark Mode Map Filter */
+    #threatMap { border-radius: 12px; border: 1px solid rgba(64,138,113,0.2); }
+    .leaflet-container { background: #0b1a18 !important; }
+
+    /* === Professional Heatmap === */
+    .pro-heatmap-wrap { position: relative; }
+    .pro-heatmap-canvas { display: block; width: 100%; cursor: crosshair; }
+    .hm-tooltip {
+        position: fixed; pointer-events: none; z-index: 9999;
+        background: rgba(10,22,20,0.96); border: 1px solid rgba(64,138,113,0.5);
+        border-radius: 10px; padding: 12px 16px; font-size: 0.78rem;
+        color: #e2e8f0; min-width: 200px; backdrop-filter: blur(12px);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5); opacity: 0;
+        transition: opacity 0.15s ease; font-family: 'Inter', sans-serif;
+    }
+    .hm-tooltip.visible { opacity: 1; }
+    .hm-tooltip .tt-ip { font-family: 'JetBrains Mono', monospace; color: #B0E4CC; font-weight: 600; font-size: 0.85rem; }
+    .hm-tooltip .tt-hour { color: #ffa94d; font-weight: 600; }
+    .hm-tooltip .tt-count { font-size: 1.3rem; font-weight: 800; color: #fff; }
+    .hm-tooltip .tt-sev-row { display: flex; gap: 10px; margin-top: 6px; }
+    .hm-tooltip .tt-sev { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
+    .hm-tooltip .tt-sev.cr { background: rgba(255,107,107,0.25); color: #ff6b6b; }
+    .hm-tooltip .tt-sev.hi { background: rgba(247,131,172,0.2); color: #f783ac; }
+    .hm-tooltip .tt-sev.md { background: rgba(255,169,77,0.2); color: #ffa94d; }
+    .hm-tooltip .tt-sev.lo { background: rgba(64,138,113,0.2); color: #408A71; }
+    .hm-tooltip .tt-cats { margin-top: 6px; color: #7a9a8e; font-size: 0.72rem; }
+    .hm-legend { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: flex-end; font-size: 0.72rem; color: var(--text-muted); }
+    .hm-legend-bar { width: 180px; height: 10px; border-radius: 5px; }
+    .hm-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #408A71; display: inline-block; animation: hmPulse 2s infinite; }
+    @keyframes hmPulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(64,138,113,0.5); } 50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(64,138,113,0); } }
+</style>
+{% endblock %}
+{% block page_title %}Threat Intelligence{% endblock %}
+{% block page_subtitle %}Aggregated threat analysis across all sessions{% endblock %}
+
+{% block content %}
+<!-- Threat Overview Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ total_flows|format_number }}</span>
+            <span class="stat-label">Total Flows Analyzed</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ total_anomalies|format_number }}</span>
+            <span class="stat-label">Anomalous Flows Detected</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ total_logs|format_number }}</span>
+            <span class="stat-label">Classified Threat Events</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ category_data|length }}</span>
+            <span class="stat-label">Attack Categories</span>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row: Category + Severity -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Attack Category Distribution</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">All Sessions
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis displays macroscopic threat classes (e.g., Botnet, DDoS, Web Attacks) detected by the HADES Stage 2 ML engine, while the Y-Axis quantifies the aggregate volume of malicious flows isolated within each respective category.
+</div>
+        </div>
+        <div class="chart-body">
+            <canvas id="threatCatChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Severity Breakdown</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge severity">Risk Level
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis categorizes alerts by dynamic risk tiers (Internal CVSS mapping), while the Y-Axis visualizes the total frequency of intrusion events, assisting SOC analysts in prioritizing high-impact threat remediation.
+</div>
+        </div>
+        <div class="chart-body">
+            <canvas id="threatSevChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row: Timeline + Detection Method -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Threat Activity Timeline</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge timeline">Daily
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis tracks temporal sequence across discrete analysis checkpoints, while the Y-Axis measures the absolute frequency of network anomalies, allowing rapid identification of coordinated attack spikes and botnet persistence.
+</div>
+        </div>
+        <div class="chart-body">
+            <canvas id="threatTimelineChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Detection Engine Usage</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">Stage 2.1 vs 2.2
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis compares operational throughput between the primary Stage 2.1 classifiers and the Stage 2.2 multiclass fallback model, while the Y-Axis highlights total detected flow volume, quantifying engine efficacy and failover resilience.
+</div>
+        </div>
+        <div class="chart-body">
+            <canvas id="threatDetectionChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Analytics Row: Heatmap + Geolocation -->
+<div class="charts-row">
+    <div class="chart-card" style="flex: 1.4;">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Source IP Threat Density Matrix</h3>
+                <span class="hm-live-dot"></span>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">Top IPs × Hour — Synced from Analysis</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Heatmap Explanation:</strong> Maps the top source IPs (Y-axis) against hourly time bins (X-axis). Cell intensity uses a log₁₀(count+1) perceptual scale. Hover for severity breakdown. Data is synchronized from uploaded file analysis results.
+            </div>
+        </div>
+        <div class="chart-body" style="padding: 16px 20px;">
+            <div class="pro-heatmap-wrap" id="proHeatmapWrap">
+                <canvas class="pro-heatmap-canvas" id="proHeatmapCanvas"></canvas>
+            </div>
+            <div class="hm-legend">
+                <span>Fewer events</span>
+                <canvas class="hm-legend-bar" id="hmLegendBar" width="180" height="10"></canvas>
+                <span>More events</span>
+            </div>
+        </div>
+    </div>
+    <!-- Floating tooltip (outside card for z-index) -->
+    <div class="hm-tooltip" id="hmTooltip"></div>
+    <div class="chart-card" style="flex: 1;">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Global Threat Origins</h3>
+                <span class="hm-live-dot"></span>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">{{ geo_data|length }} Origins</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Map Explanation:</strong> Projects source IP addresses onto a global map using deterministic geolocation. Marker size scales with event volume. Hover for IP and country details.
+            </div>
+        </div>
+        <div class="chart-body" style="padding: 0; position: relative; overflow: hidden;">
+            <canvas id="threatMapCanvas" style="width: 100%; display: block; border-radius: 0 0 12px 12px;"></canvas>
+            <div class="hm-tooltip" id="mapTooltip"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Specific Attacks Table -->
+<div class="table-card">
+    <div class="table-header">
+        <h3>Top 10 Specific Attacks</h3>
+        <div class="chart-badge">All Time</div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Attack Type</th>
+                    <th>Category</th>
+                    <th>Occurrences</th>
+                    <th>Threat Level</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for atk in specific_stats %}
+                <tr>
+                    <td><span class="rank-badge">{{ loop.index }}</span></td>
+                    <td><strong>{{ atk.specific_attack }}</strong></td>
+                    <td><span class="category-badge {{ atk.attack_category|lower|replace('+','') }}">{{ atk.attack_category }}</span></td>
+                    <td class="td-anomaly">{{ atk.count }}</td>
+                    <td>
+                        {% if atk.count > 10 %}
+                        <span class="severity-badge critical">CRITICAL</span>
+                        {% elif atk.count > 5 %}
+                        <span class="severity-badge high">HIGH</span>
+                        {% elif atk.count > 2 %}
+                        <span class="severity-badge medium">MEDIUM</span>
+                        {% else %}
+                        <span class="severity-badge low">LOW</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="empty-state">No attacks detected yet. Upload traffic files to start analysis.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Critical Threats Feed -->
+<div class="table-card">
+    <div class="table-header">
+        <h3>Recent Critical & High Severity Threats</h3>
+        <div class="chart-badge severity">Live Feed</div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Source File</th>
+                    <th>Source IP</th>
+                    <th>Destination IP</th>
+                    <th>Category</th>
+                    <th>Specific Attack</th>
+                    <th>Severity</th>
+                    <th>Engine</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in critical_threats %}
+                <tr class="row-anomaly">
+                    <td class="td-time">{{ t.timestamp.strftime('%Y-%m-%d %H:%M') if t.timestamp else 'N/A' }}</td>
+                    <td class="td-file">{{ t.filename }}</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--green-light);">{{ t.source_ip or '—' }}</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #a29bfe;">{{ t.dest_ip or '—' }}</td>
+                    <td><span class="category-badge {{ t.attack_category|lower|replace('+','') if t.attack_category else '' }}">{{ t.attack_category or 'N/A' }}</span></td>
+                    <td><strong>{{ t.specific_attack or 'N/A' }}</strong></td>
+                    <td><span class="severity-badge {{ t.severity }}">{{ t.severity|upper }} (CVSS {{ t.severity|cvss }})</span></td>
+                    <td><code>{{ t.detected_by or 'N/A' }}</code></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="empty-state">No critical threats detected. Your network looks safe.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Category Detail Cards -->
+{% if category_data %}
+<div class="section-title">
+    <h3>Category Details</h3>
+</div>
+<div class="category-cards-grid">
+    {% for cat, count in category_data.items() %}
+    <div class="category-detail-card {{ cat|lower|replace('+','') }}">
+        <div class="cat-detail-header">
+            <span class="cat-detail-name">{{ cat }}</span>
+            <span class="cat-detail-count">{{ count }} events</span>
+        </div>
+        <div class="cat-detail-bar">
+            <div class="cat-bar-fill" style="width: {{ (count / (category_data.values()|list|max)) * 100 }}%"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const COLORS = {
+        red: '#ff6b6b', purple: '#a29bfe', orange: '#ffa94d', yellow: '#ffd43b',
+        pink: '#f783ac', blue: '#74c0fc', green: '#408A71', greenLight: '#B0E4CC',
+    };
+    const catColors = { 'DOS+DDOS': COLORS.red, 'BOTNET': COLORS.purple, 'INFILTRATION': COLORS.orange, 'WEB_ATTACKS': COLORS.pink, 'BRUTE_FORCE': COLORS.yellow };
+    const sevColors = { info: COLORS.blue, low: COLORS.green, medium: COLORS.orange, high: COLORS.pink, critical: COLORS.red };
+    const chartOpts = { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { family: 'Inter' } } } } };
+    Chart.defaults.color = '#e2e8f0';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+
+    // Category Doughnut
+    const catData = {{ category_data|tojson }};
+    if (Object.keys(catData).length > 0) {
+        new Chart(document.getElementById('threatCatChart'), {
+            type: 'doughnut',
+            data: { labels: Object.keys(catData), datasets: [{ data: Object.values(catData), backgroundColor: Object.keys(catData).map(k => catColors[k] || COLORS.green), borderColor: '#091413', borderWidth: 3 }] },
+            options: chartOpts
+        });
+    } else {
+        document.getElementById('threatCatChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No data yet</div>';
+    }
+
+    // Severity Doughnut
+    const sevData = {{ severity_stats|tojson }};
+    if (Object.keys(sevData).length > 0) {
+        new Chart(document.getElementById('threatSevChart'), {
+            type: 'doughnut',
+            data: { labels: Object.keys(sevData).map(s => s.toUpperCase()), datasets: [{ data: Object.values(sevData), backgroundColor: Object.keys(sevData).map(k => sevColors[k] || '#666'), borderColor: '#091413', borderWidth: 3 }] },
+            options: chartOpts
+        });
+    } else {
+        document.getElementById('threatSevChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No data yet</div>';
+    }
+
+    // Timeline
+    const timeData = {{ daily_threats|tojson }};
+    if (timeData.length > 0) {
+        new Chart(document.getElementById('threatTimelineChart'), {
+            type: 'line',
+            data: { labels: timeData.map(d => d.date), datasets: [{ label: 'Threats', data: timeData.map(d => d.count), borderColor: COLORS.red, backgroundColor: COLORS.red + '22', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 3, pointBackgroundColor: COLORS.red }] },
+            options: { ...chartOpts, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#e2e8f0', maxTicksLimit: 10 }, grid: { color: 'rgba(64,138,113,0.05)' } }, y: { beginAtZero: true, grid: { color: 'rgba(64,138,113,0.05)' } } } }
+        });
+    } else {
+        document.getElementById('threatTimelineChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No timeline data</div>';
+    }
+
+    // Detection Method
+    const detData = {{ detection_stats|tojson }};
+    const detLabels = Object.keys(detData).map(k => k === 'stage2.1' ? 'Stage 2.1 (Primary)' : 'Stage 2.2 (Fallback)');
+    if (Object.keys(detData).length > 0) {
+        new Chart(document.getElementById('threatDetectionChart'), {
+            type: 'doughnut',
+            data: { labels: detLabels, datasets: [{ data: Object.values(detData), backgroundColor: [COLORS.green + '88', COLORS.orange + '88'], borderColor: [COLORS.green, COLORS.orange], borderWidth: 2 }] },
+            options: chartOpts
+        });
+    } else {
+        document.getElementById('threatDetectionChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No data yet</div>';
+    }
+
+    // --- 1. Connected Source IP × Hour Heatmap ---
+    const HM = {{ pro_heatmap|tojson }};
+    const hmCanvas = document.getElementById('proHeatmapCanvas');
+    const hmCtx = hmCanvas.getContext('2d');
+    const hmTooltip = document.getElementById('hmTooltip');
+    const hmWrap = document.getElementById('proHeatmapWrap');
+
+    if (HM.ips.length > 0) {
+    const LM = 148, TM = 44, RM = 6, BM = 4;
+    const DPR = window.devicePixelRatio || 1;
+    const ROWS = HM.ips.length, COLS = 24;
+
+    // Build cell lookup & raw value grid
+    const cellMap = {};
+    HM.cells.forEach(c => { cellMap[c.r + ',' + c.c] = c; });
+    const logMax = Math.log10(HM.max + 1);
+
+    // Build a 2D value grid for blending
+    const rawGrid = [];
+    for (let r = 0; r < ROWS; r++) {
+        rawGrid[r] = [];
+        for (let c = 0; c < COLS; c++) {
+            const cell = cellMap[r + ',' + c];
+            rawGrid[r][c] = cell ? cell.v : 0;
+        }
+    }
+    // Gaussian-blur pass: bleed color into empty neighbours for connected look
+    const blurGrid = [];
+    for (let r = 0; r < ROWS; r++) {
+        blurGrid[r] = [];
+        for (let c = 0; c < COLS; c++) {
+            if (rawGrid[r][c] > 0) { blurGrid[r][c] = rawGrid[r][c]; continue; }
+            let sum = 0, wt = 0;
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && rawGrid[nr][nc] > 0) {
+                    const d = (dr === 0 && dc === 0) ? 1.0 : (Math.abs(dr)+Math.abs(dc) === 1 ? 0.35 : 0.12);
+                    sum += rawGrid[nr][nc] * d; wt += d;
+                }
+            }
+            blurGrid[r][c] = wt > 0 ? sum / wt * 0.25 : 0; // subtle ambient bleed
+        }
+    }
+
+    // Color: returns [r,g,b,a] for smooth interpolation
+    function hmRGBA(v) {
+        if (v <= 0) return [15, 28, 25, 0.6]; // dark base
+        const t = Math.min(1, Math.log10(v + 1) / logMax);
+        if (t < 0.3) {
+            const u = t / 0.3;
+            return [30 + 34*u, 80 + 78*u, 60 + 73*u, 0.65 + u*0.15];
+        } else if (t < 0.6) {
+            const u = (t - 0.3) / 0.3;
+            return [64 + 191*u, 158 - 50*u, 133 - 56*u, 0.8 + u*0.1];
+        } else {
+            const u = (t - 0.6) / 0.4;
+            return [255, 107 - 47*u, 107 - 47*u, 0.9 + u*0.1];
+        }
+    }
+    function rgbaStr(c) { return `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${c[3].toFixed(3)})`; }
+    function hmColor(v) { return rgbaStr(hmRGBA(v)); }
+
+    function hmResize() {
+        const W = hmWrap.clientWidth;
+        const cellW = (W - LM - RM) / COLS;
+        const cellH = Math.max(24, Math.min(38, cellW * 0.75));
+        const gridH = ROWS * cellH;
+        const H = TM + gridH + BM;
+        hmCanvas.width = W * DPR; hmCanvas.height = H * DPR;
+        hmCanvas.style.width = W + 'px'; hmCanvas.style.height = H + 'px';
+        hmCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        return { W, H, cellW, cellH, gridH };
+    }
+
+    let hovered = null;
+    let dims = hmResize();
+
+    function hmDraw() {
+        const {W, H, cellW, cellH, gridH} = dims;
+        hmCtx.clearRect(0, 0, W, H);
+
+        // ── Clip entire grid area with rounded rect ──
+        hmCtx.save();
+        const gridX = LM, gridY = TM, gridW = COLS * cellW, CR = 8;
+        hmCtx.beginPath();
+        hmCtx.moveTo(gridX+CR, gridY); hmCtx.lineTo(gridX+gridW-CR, gridY);
+        hmCtx.quadraticCurveTo(gridX+gridW, gridY, gridX+gridW, gridY+CR);
+        hmCtx.lineTo(gridX+gridW, gridY+gridH-CR);
+        hmCtx.quadraticCurveTo(gridX+gridW, gridY+gridH, gridX+gridW-CR, gridY+gridH);
+        hmCtx.lineTo(gridX+CR, gridY+gridH);
+        hmCtx.quadraticCurveTo(gridX, gridY+gridH, gridX, gridY+gridH-CR);
+        hmCtx.lineTo(gridX, gridY+CR);
+        hmCtx.quadraticCurveTo(gridX, gridY, gridX+CR, gridY);
+        hmCtx.closePath();
+        hmCtx.clip();
+
+        // ── Fill connected cells (no gaps) ──
+        for (let ri = 0; ri < ROWS; ri++) {
+            for (let ci = 0; ci < COLS; ci++) {
+                const cx = LM + ci * cellW, cy = TM + ri * cellH;
+                const dispVal = rawGrid[ri][ci] > 0 ? rawGrid[ri][ci] : blurGrid[ri][ci];
+                hmCtx.fillStyle = hmColor(dispVal);
+                hmCtx.fillRect(cx, cy, cellW + 0.5, cellH + 0.5); // +0.5 kills sub-pixel seams
+
+                // Critical glow overlay
+                const cell = cellMap[ri + ',' + ci];
+                if (cell && cell.cr > 0) {
+                    const glowR = Math.max(cellW, cellH) * 0.6;
+                    const grd = hmCtx.createRadialGradient(cx+cellW/2, cy+cellH/2, 0, cx+cellW/2, cy+cellH/2, glowR);
+                    grd.addColorStop(0, 'rgba(255,90,90,0.18)');
+                    grd.addColorStop(1, 'rgba(255,90,90,0)');
+                    hmCtx.fillStyle = grd;
+                    hmCtx.fillRect(cx - glowR/2, cy - glowR/2, cellW + glowR, cellH + glowR);
+                }
+            }
+        }
+
+        // ── Thin grid lines (subtle, inside clip) ──
+        hmCtx.strokeStyle = 'rgba(176,228,204,0.06)';
+        hmCtx.lineWidth = 0.5;
+        for (let ri = 1; ri < ROWS; ri++) {
+            const y = TM + ri * cellH;
+            hmCtx.beginPath(); hmCtx.moveTo(LM, y); hmCtx.lineTo(LM + gridW, y); hmCtx.stroke();
+        }
+        for (let ci = 1; ci < COLS; ci++) {
+            const x = LM + ci * cellW;
+            hmCtx.beginPath(); hmCtx.moveTo(x, TM); hmCtx.lineTo(x, TM + gridH); hmCtx.stroke();
+        }
+
+        // ── Hover crosshair + cell highlight ──
+        if (hovered) {
+            const hx = LM + hovered.c * cellW, hy = TM + hovered.r * cellH;
+            // Row highlight band
+            hmCtx.fillStyle = 'rgba(176,228,204,0.06)';
+            hmCtx.fillRect(LM, hy, gridW, cellH);
+            // Column highlight band
+            hmCtx.fillRect(hx, TM, cellW, gridH);
+            // Cell border
+            hmCtx.strokeStyle = 'rgba(255,255,255,0.85)';
+            hmCtx.lineWidth = 1.5;
+            hmCtx.strokeRect(hx + 0.5, hy + 0.5, cellW - 1, cellH - 1);
+        }
+        hmCtx.restore(); // end clip
+
+        // ── Hour labels (above grid) ──
+        hmCtx.textAlign = 'center';
+        const hrLabels = ['12AM','','','3AM','','','6AM','','','9AM','','','12PM','','','3PM','','','6PM','','','9PM','',''];
+        for (let h = 0; h < 24; h++) {
+            const cx = LM + h * cellW + cellW / 2;
+            if (hrLabels[h]) {
+                // Primary label every 3 hours
+                hmCtx.font = '600 9.5px "Inter", sans-serif';
+                hmCtx.fillStyle = '#8fb8a8';
+                hmCtx.fillText(hrLabels[h], cx, TM - 14);
+                // Tick mark
+                hmCtx.strokeStyle = 'rgba(143,184,168,0.3)';
+                hmCtx.lineWidth = 1;
+                hmCtx.beginPath(); hmCtx.moveTo(cx, TM - 6); hmCtx.lineTo(cx, TM); hmCtx.stroke();
+            } else {
+                // Small tick only
+                hmCtx.strokeStyle = 'rgba(143,184,168,0.12)';
+                hmCtx.lineWidth = 0.5;
+                hmCtx.beginPath(); hmCtx.moveTo(cx, TM - 3); hmCtx.lineTo(cx, TM); hmCtx.stroke();
+            }
+        }
+
+        // ── IP labels (left of grid) ──
+        HM.ips.forEach((ipInfo, ri) => {
+            const rowY = TM + ri * cellH;
+            const isHovRow = hovered && hovered.r === ri;
+            // IP address
+            hmCtx.font = '600 10.5px "JetBrains Mono", monospace';
+            hmCtx.fillStyle = isHovRow ? '#B0E4CC' : '#7a9a8e';
+            hmCtx.textAlign = 'right';
+            const ipLabel = ipInfo.ip.length > 18 ? ipInfo.ip.slice(0,17) + '…' : ipInfo.ip;
+            hmCtx.fillText(ipLabel, LM - 10, rowY + cellH / 2 + 4);
+            // Event count
+            hmCtx.font = '600 8px "Inter", sans-serif';
+            hmCtx.fillStyle = isHovRow ? '#5a8a78' : '#2d5548';
+            hmCtx.fillText(ipInfo.total + ' events', LM - 10, rowY + cellH / 2 + 15);
+        });
+    }
+
+    // ── Mouse tracking ──
+    hmCanvas.addEventListener('mousemove', (e) => {
+        const rect = hmCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const {cellW, cellH} = dims;
+        const ci = Math.floor((mx - LM) / cellW);
+        const ri = Math.floor((my - TM) / cellH);
+
+        if (ci >= 0 && ci < 24 && ri >= 0 && ri < HM.ips.length && mx >= LM) {
+            hovered = {r: ri, c: ci};
+            hmDraw();
+            const cell = cellMap[ri + ',' + ci];
+            const v = cell ? cell.v : 0;
+            const bv = blurGrid[ri][ci];
+            const ipInfo = HM.ips[ri];
+            let html = `<div class="tt-ip">${ipInfo.ip}</div>`;
+            html += `<div style="margin:4px 0"><span class="tt-hour">${ci.toString().padStart(2,'0')}:00–${ci.toString().padStart(2,'0')}:59</span></div>`;
+            html += `<div class="tt-count">${v} <span style="font-size:0.7rem;font-weight:400;color:#7a9a8e">events</span></div>`;
+            if (cell && v > 0) {
+                html += '<div class="tt-sev-row">';
+                if (cell.cr) html += `<span class="tt-sev cr">CRIT ${cell.cr}</span>`;
+                if (cell.hi) html += `<span class="tt-sev hi">HIGH ${cell.hi}</span>`;
+                if (cell.md) html += `<span class="tt-sev md">MED ${cell.md}</span>`;
+                if (cell.lo) html += `<span class="tt-sev lo">LOW ${cell.lo}</span>`;
+                html += '</div>';
+                if (cell.cats && cell.cats.length) html += `<div class="tt-cats">${cell.cats.join(' · ')}</div>`;
+            } else if (bv > 0) {
+                html += `<div class="tt-cats" style="margin-top:4px">Ambient bleed from adjacent cells</div>`;
+            }
+            hmTooltip.innerHTML = html;
+            hmTooltip.classList.add('visible');
+            let tx = e.clientX + 16, ty = e.clientY - 10;
+            if (tx + 240 > window.innerWidth) tx = e.clientX - 250;
+            if (ty + 160 > window.innerHeight) ty = e.clientY - 160;
+            hmTooltip.style.left = tx + 'px'; hmTooltip.style.top = ty + 'px';
+        } else {
+            if (hovered) { hovered = null; hmDraw(); }
+            hmTooltip.classList.remove('visible');
+        }
+    });
+    hmCanvas.addEventListener('mouseleave', () => {
+        hovered = null; hmDraw(); hmTooltip.classList.remove('visible');
+    });
+
+    // Legend gradient bar
+    const legCanvas = document.getElementById('hmLegendBar');
+    const legCtx = legCanvas.getContext('2d');
+    const grad = legCtx.createLinearGradient(0, 0, 180, 0);
+    for (let i = 0; i <= 20; i++) {
+        const t = i / 20;
+        grad.addColorStop(t, hmColor(Math.pow(10, t * logMax) - 1));
+    }
+    legCtx.fillStyle = grad;
+    legCtx.beginPath(); legCtx.roundRect(0, 0, 180, 10, 5); legCtx.fill();
+
+    hmDraw();
+    window.addEventListener('resize', () => { dims = hmResize(); hmDraw(); });
+    } else {
+        document.getElementById('proHeatmapWrap').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:180px;color:#5a8a78;font-style:italic;">No source IP data yet — upload and analyze traffic files to populate this heatmap.</div>';
+    }
+
+    // --- 2. Canvas World Map ---
+    const geoData = {{ geo_data|tojson }};
+    const mapCanvas = document.getElementById('threatMapCanvas');
+    const mapCtx = mapCanvas.getContext('2d');
+    const mapTip = document.getElementById('mapTooltip');
+    const mapDPR = window.devicePixelRatio || 1;
+
+    function mapSetup() {
+        const parent = mapCanvas.parentElement;
+        const W = parent.clientWidth;
+        const H = Math.max(300, W * 0.48);
+        mapCanvas.width = W * mapDPR; mapCanvas.height = H * mapDPR;
+        mapCanvas.style.width = W + 'px'; mapCanvas.style.height = H + 'px';
+        mapCtx.setTransform(mapDPR, 0, 0, mapDPR, 0, 0);
+        return { W, H };
+    }
+
+    // Mercator projection
+    function project(lat, lng, W, H) {
+        const x = (lng + 180) / 360 * W;
+        const latR = lat * Math.PI / 180;
+        const mercN = Math.log(Math.tan(Math.PI / 4 + latR / 2));
+        const y = H / 2 - (mercN / Math.PI) * (H / 2);
+        return [x, Math.max(0, Math.min(H, y))];
+    }
+
+    // Simplified world coastline dots (major landmass outlines)
+    const LAND = [
+        // North America
+        [-125,49],[-120,34],[-117,32],[-105,30],[-97,26],[-97,28],[-90,30],[-82,25],[-81,31],[-75,35],[-70,42],[-67,45],[-65,47],[-60,46],[-55,47],[-52,47],
+        // South America
+        [-80,9],[-77,4],[-75,-5],[-70,-15],[-68,-22],[-65,-28],[-58,-34],[-52,-33],[-48,-26],[-43,-23],[-38,-13],[-35,-8],[-50,5],[-60,7],[-68,11],[-75,10],
+        // Europe
+        [-10,36],[-9,39],[-5,36],[0,38],[3,43],[5,44],[7,44],[10,44],[13,45],[15,46],[14,42],[18,40],[22,38],[26,35],[28,36],[30,37],[32,36],[36,37],[30,45],[28,46],[24,46],[20,44],[15,45],[12,46],[10,54],[7,54],[4,52],[0,51],[-5,50],[-6,53],[-3,56],[0,58],[5,60],[12,56],[13,55],[14,54],[20,55],[22,56],[24,58],[28,60],[30,62],[28,66],[25,68],[20,69],[18,70],[15,69],[10,64],[5,62],
+        // Africa
+        [-17,15],[-16,12],[-8,5],[5,5],[10,4],[10,1],[9,-4],[12,-6],[15,-5],[20,-5],[30,-3],[35,0],[40,2],[42,5],[44,10],[44,12],[50,12],[43,12],[38,15],[33,30],[32,32],[25,30],[12,32],[10,36],[-5,36],[-10,35],[-17,22],
+        // Asia
+        [30,32],[35,33],[37,37],[40,40],[42,42],[45,40],[50,38],[52,37],[54,25],[56,26],[60,25],[65,25],[68,24],[72,20],[73,16],[77,8],[80,7],[80,13],[85,22],[88,22],[90,22],[92,20],[95,16],[100,14],[100,3],[104,1],[106,-6],[110,-7],[115,-8],[120,0],[115,5],[110,10],[105,14],[105,20],[108,22],[110,20],[112,22],[117,25],[120,30],[121,31],[122,30],[122,38],[125,38],[127,36],[129,35],[130,34],[131,32],[131,34],[133,35],[135,35],[136,36],[138,37],[140,38],[140,40],[142,43],[145,44],[143,47],[140,48],[135,48],[130,43],[125,43],[120,50],[122,53],[128,50],[131,48],[135,54],[140,50],[142,55],[141,52],[160,60],[170,62],[175,65],[180,65],
+        // Australia
+        [115,-34],[115,-22],[130,-12],[136,-12],[142,-10],[145,-15],[150,-23],[152,-28],[154,-27],[153,-30],[151,-34],[145,-39],[135,-35],[130,-32],[125,-34],[115,-34],
+    ];
+
+    let mapHovered = -1;
+    let mapDims = mapSetup();
+    let pulsePhase = 0;
+
+    function drawMap() {
+        const { W, H } = mapDims;
+        mapCtx.clearRect(0, 0, W, H);
+
+        // Background gradient
+        const bg = mapCtx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#081412'); bg.addColorStop(1, '#0a1e1a');
+        mapCtx.fillStyle = bg;
+        mapCtx.fillRect(0, 0, W, H);
+
+        // Grid lines
+        mapCtx.strokeStyle = 'rgba(64,138,113,0.07)';
+        mapCtx.lineWidth = 0.5;
+        for (let lat = -60; lat <= 80; lat += 20) {
+            const [, y] = project(lat, 0, W, H);
+            mapCtx.beginPath(); mapCtx.moveTo(0, y); mapCtx.lineTo(W, y); mapCtx.stroke();
+        }
+        for (let lng = -180; lng <= 180; lng += 30) {
+            const [x] = project(0, lng, W, H);
+            mapCtx.beginPath(); mapCtx.moveTo(x, 0); mapCtx.lineTo(x, H); mapCtx.stroke();
+        }
+
+        // Coastline dots
+        mapCtx.fillStyle = 'rgba(64,138,113,0.18)';
+        LAND.forEach(([lng, lat]) => {
+            const [x, y] = project(lat, lng, W, H);
+            mapCtx.beginPath(); mapCtx.arc(x, y, 1.5, 0, Math.PI * 2); mapCtx.fill();
+        });
+        // Connect coastline with faint lines per region
+        mapCtx.strokeStyle = 'rgba(64,138,113,0.08)';
+        mapCtx.lineWidth = 0.8;
+        const regions = [[0,15],[16,31],[32,80],[81,105],[106,165],[166,179]]; // rough region breaks
+        regions.forEach(([s,e]) => {
+            mapCtx.beginPath();
+            for (let i = s; i <= Math.min(e, LAND.length-1); i++) {
+                const [x, y] = project(LAND[i][1], LAND[i][0], W, H);
+                i === s ? mapCtx.moveTo(x, y) : mapCtx.lineTo(x, y);
+            }
+            mapCtx.stroke();
+        });
+
+        // Threat markers
+        const pulse = Math.sin(pulsePhase) * 0.3 + 0.7; // 0.4 to 1.0
+        geoData.forEach((pt, idx) => {
+            const [x, y] = project(pt.lat, pt.lng, W, H);
+            const baseR = Math.min(22, 5 + Math.sqrt(pt.count) * 2.5);
+            const r = baseR * (idx === mapHovered ? 1.3 : 1);
+
+            // Outer glow
+            const glow = mapCtx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+            glow.addColorStop(0, `rgba(255,107,107,${0.15 * pulse})`);
+            glow.addColorStop(1, 'rgba(255,107,107,0)');
+            mapCtx.fillStyle = glow;
+            mapCtx.beginPath(); mapCtx.arc(x, y, r * 2.5, 0, Math.PI * 2); mapCtx.fill();
+
+            // Inner marker
+            const inner = mapCtx.createRadialGradient(x, y, 0, x, y, r);
+            inner.addColorStop(0, `rgba(255,120,120,${0.85 * pulse})`);
+            inner.addColorStop(0.6, `rgba(255,80,80,${0.6 * pulse})`);
+            inner.addColorStop(1, 'rgba(255,60,60,0.1)');
+            mapCtx.fillStyle = inner;
+            mapCtx.beginPath(); mapCtx.arc(x, y, r, 0, Math.PI * 2); mapCtx.fill();
+
+            // Core dot
+            mapCtx.fillStyle = idx === mapHovered ? '#fff' : 'rgba(255,200,200,0.9)';
+            mapCtx.beginPath(); mapCtx.arc(x, y, Math.max(2, r * 0.25), 0, Math.PI * 2); mapCtx.fill();
+
+            // Country label for hovered
+            if (idx === mapHovered) {
+                mapCtx.font = '600 11px "Inter", sans-serif';
+                mapCtx.fillStyle = '#e2e8f0';
+                mapCtx.textAlign = 'center';
+                mapCtx.fillText(pt.country, x, y - r - 8);
+            }
+        });
+    }
+
+    // Animate pulse
+    let mapAnimId;
+    function animateMap() {
+        pulsePhase += 0.04;
+        drawMap();
+        mapAnimId = requestAnimationFrame(animateMap);
+    }
+    animateMap();
+
+    // Mouse hover
+    mapCanvas.addEventListener('mousemove', (e) => {
+        const rect = mapCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const { W, H } = mapDims;
+        let closest = -1, minD = 30;
+        geoData.forEach((pt, idx) => {
+            const [x, y] = project(pt.lat, pt.lng, W, H);
+            const d = Math.sqrt((mx-x)**2 + (my-y)**2);
+            if (d < minD) { minD = d; closest = idx; }
+        });
+        mapHovered = closest;
+        if (closest >= 0) {
+            const pt = geoData[closest];
+            mapTip.innerHTML = `<div class="tt-ip">${pt.ip}</div><div style="margin:4px 0;color:#ffa94d;font-weight:600">${pt.country}</div><div class="tt-count">${pt.count} <span style="font-size:0.7rem;font-weight:400;color:#7a9a8e">events</span></div>`;
+            mapTip.classList.add('visible');
+            let tx = e.clientX + 16, ty = e.clientY - 10;
+            if (tx + 220 > window.innerWidth) tx = e.clientX - 230;
+            mapTip.style.left = tx + 'px'; mapTip.style.top = ty + 'px';
+        } else {
+            mapTip.classList.remove('visible');
+        }
+    });
+    mapCanvas.addEventListener('mouseleave', () => {
+        mapHovered = -1; mapTip.classList.remove('visible');
+    });
+    window.addEventListener('resize', () => { mapDims = mapSetup(); });
+})();
+</script>
+{% endblock %}

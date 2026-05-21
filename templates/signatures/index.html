@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}IPS Signature Engine{% endblock %}
+{% block page_title %}IPS Signature Engine{% endblock %}
+{% block page_subtitle %}HADES signature-based detection & prevention core — manage, deploy, and monitor PCRE rules{% endblock %}
+
+{% block content %}
+
+<!-- Engine Status Bar -->
+<div class="stats-grid" style="margin-bottom: 24px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(64,138,113,0.15); color:#408A71;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value">{{ total_sigs }}</div>
+            <div class="stat-label">Total Signatures</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(64,195,113,0.15); color:#40c571;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#40c571;">{{ active_sigs }}</div>
+            <div class="stat-label">Active / Enforcing</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(255,107,107,0.12); color:#ff6b6b;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#ff6b6b;">{{ total_hits }}</div>
+            <div class="stat-label">Total Pattern Hits</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(255,100,100,0.18); color:#ff4444;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="stat-info">
+            <div class="stat-value" style="color:#ff4444;">{{ critical_sigs }}</div>
+            <div class="stat-label">Critical Rules</div>
+        </div>
+    </div>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 340px; gap:20px; align-items:start;">
+
+<!-- Left: Signature Table -->
+<div class="table-card">
+    <!-- Filter Bar -->
+    <div style="padding:16px 20px; border-bottom:1px solid rgba(64,138,113,0.12);">
+        <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+            <div style="flex:1; min-width:180px; position:relative;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-muted)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" name="search" value="{{ search }}" placeholder="Search SID, name, pattern…"
+                    style="width:100%;padding:7px 8px 7px 28px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.83rem;box-sizing:border-box;">
+            </div>
+            <select name="source" style="padding:7px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.83rem;">
+                <option value="">All Sources</option>
+                <option value="et" {% if source_filter=='et' %}selected{% endif %}>ET Open ({{ et_count }})</option>
+                <option value="talos" {% if source_filter=='talos' %}selected{% endif %}>Talos / Snort ({{ talos_count }})</option>
+                <option value="custom" {% if source_filter=='custom' %}selected{% endif %}>Custom ({{ custom_count }})</option>
+            </select>
+            <select name="severity" style="padding:7px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.83rem;">
+                <option value="">All Severities</option>
+                {% for s in ['info','low','medium','high','critical'] %}
+                <option value="{{ s }}" {% if s == sev_filter %}selected{% endif %}>{{ s|upper }}</option>
+                {% endfor %}
+            </select>
+            <select name="status" style="padding:7px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.83rem;">
+                <option value="">All Status</option>
+                <option value="active" {% if status_filter=='active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if status_filter=='inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+            <button type="submit" class="action-btn" style="cursor:pointer;padding:7px 16px;">Filter</button>
+            {% if search or sev_filter or status_filter or source_filter %}
+            <a href="{{ url_for('signatures.index') }}" class="action-btn" style="padding:7px 14px;background:rgba(255,107,107,0.1);border-color:#ff6b6b;color:#ff6b6b;">✕ Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="table-header" style="padding:14px 20px 8px;">
+        <h3>Pattern Registry
+            <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-left:8px;">{{ pagination.total }} rule{% if pagination.total != 1 %}s{% endif %}</span>
+        </h3>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width:24px;"></th>
+                    <th>SID</th>
+                    <th>Rule Name</th>
+                    <th>PCRE Pattern</th>
+                    <th>Severity</th>
+                    <th>MITRE</th>
+                    <th style="text-align:center;">Hits</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sig in signatures %}
+                <tr style="{{ 'opacity:0.45;' if not sig.is_active }}">
+                    <td>
+                        <a href="{{ url_for('signatures.toggle', sig_id=sig.id) }}" title="{{ 'Deactivate' if sig.is_active else 'Activate' }}" style="display:flex;">
+                            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-top:3px;
+                                background:{{ '#40c571' if sig.is_active else '#555' }};
+                                box-shadow:{{ '0 0 6px #40c571' if sig.is_active else 'none' }};"></span>
+                        </a>
+                    </td>
+                    <td><code style="font-size:0.75rem;font-weight:700;color:var(--green-light);">{{ sig.sid }}</code>
+                        {% if sig.sid.startswith('ET-') %}
+                        <span style="display:block;font-size:0.62rem;color:#408A71;margin-top:1px;">ET Open</span>
+                        {% elif sig.sid.startswith('TALOS-') %}
+                        <span style="display:block;font-size:0.62rem;color:#00aeef;margin-top:1px;">Talos</span>
+                        {% else %}
+                        <span style="display:block;font-size:0.62rem;color:#a29bfe;margin-top:1px;">Custom</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-weight:600;font-size:0.88rem;">{{ sig.name }}</div>
+                        {% if sig.description %}
+                        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">{{ sig.description }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <code style="font-size:0.72rem;background:rgba(0,0,0,0.25);padding:3px 7px;border-radius:4px;display:block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                              title="{{ sig.pattern }}">{{ sig.pattern }}</code>
+                    </td>
+                    <td>
+                        <span class="severity-badge {{ sig.severity }}">{{ sig.severity|upper }}</span>
+                    </td>
+                    <td>
+                        {% if sig.mitre_id %}
+                        <div style="font-size:0.72rem;">
+                            <span style="color:#a29bfe;font-weight:700;">{{ sig.mitre_id }}</span>
+                            <div style="color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-top:1px;">{{ sig.mitre_tactic }}</div>
+                        </div>
+                        {% else %}<span style="color:var(--text-muted);font-size:0.75rem;">—</span>{% endif %}
+                    </td>
+                    <td style="text-align:center;">
+                        {% if sig.hit_count > 0 %}
+                        <span style="font-weight:700;color:{% if sig.hit_count > 100 %}#ff6b6b{% elif sig.hit_count > 10 %}#ffa94d{% else %}var(--text-primary){% endif %};">
+                            {{ sig.hit_count }}
+                        </span>
+                        {% else %}<span style="color:var(--text-muted);">0</span>{% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <a href="{{ url_for('signatures.toggle', sig_id=sig.id) }}"
+                               class="action-btn" style="padding:4px 10px;font-size:0.75rem;
+                               {% if sig.is_active %}background:rgba(255,169,77,0.1);border-color:#ffa94d;color:#ffa94d;{% else %}background:rgba(64,197,113,0.1);border-color:#40c571;color:#40c571;{% endif %}">
+                               {{ '⏸ Pause' if sig.is_active else '▶ Enable' }}
+                            </a>
+                            <a href="{{ url_for('signatures.delete', sig_id=sig.id) }}"
+                               onclick="return confirm('Delete signature {{ sig.sid }}? This cannot be undone.')"
+                               class="action-btn" style="padding:4px 10px;font-size:0.75rem;background:rgba(255,107,107,0.1);border-color:#ff6b6b;color:#ff6b6b;">
+                               🗑
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="empty-state" style="text-align:center;padding:48px;">
+                        <div style="font-size:2rem;margin-bottom:12px;">🛡️</div>
+                        <div style="color:var(--text-muted);">No signatures found{% if search or sev_filter or status_filter %} matching your filters{% endif %}.</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if pagination.pages > 1 %}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-top:1px solid rgba(64,138,113,0.1);">
+        <span style="font-size:0.8rem;color:var(--text-muted);">Page {{ pagination.page }} of {{ pagination.pages }} · {{ pagination.total }} rules</span>
+        <div style="display:flex;gap:8px;">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('signatures.index', page=pagination.prev_num, search=search, severity=sev_filter, status=status_filter, source=source_filter) }}" class="action-btn" style="padding:5px 12px;">← Prev</a>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a href="{{ url_for('signatures.index', page=pagination.next_num, search=search, severity=sev_filter, status=status_filter, source=source_filter) }}" class="action-btn" style="padding:5px 12px;">Next →</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Right: Deploy New Signature -->
+<div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Deploy Form -->
+    <div class="table-card">
+        <div style="padding:16px 20px;border-bottom:1px solid rgba(64,138,113,0.1);">
+            <h3 style="margin:0;font-size:1rem;">➕ Deploy New Rule</h3>
+            <p style="margin:4px 0 0;font-size:0.78rem;color:var(--text-muted);">Add a custom PCRE pattern to the IPS engine.</p>
+        </div>
+        <div style="padding:18px 20px;">
+            <form action="{{ url_for('signatures.add') }}" method="POST" style="display:flex;flex-direction:column;gap:12px;">
+
+                <div>
+                    <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">Signature ID (SID)</label>
+                    <input type="text" name="sid" placeholder="HADES-SIG-9001" required
+                        style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.85rem;box-sizing:border-box;font-family:'JetBrains Mono',monospace;">
+                </div>
+
+                <div>
+                    <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">Rule Name</label>
+                    <input type="text" name="name" placeholder="SQL Injection Attempt" required
+                        style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.85rem;box-sizing:border-box;">
+                </div>
+
+                <div>
+                    <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">PCRE Pattern</label>
+                    <input type="text" name="pattern" placeholder="SELECT.*FROM|UNION.*SELECT" required
+                        style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.82rem;box-sizing:border-box;font-family:'JetBrains Mono',monospace;">
+                    <span style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;display:block;">Case-insensitive matching applied automatically.</span>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div>
+                        <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">Severity</label>
+                        <select name="severity"
+                            style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.85rem;">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">MITRE ID</label>
+                        <input type="text" name="mitre_id" placeholder="T1190"
+                            style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.85rem;box-sizing:border-box;">
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">MITRE Tactic</label>
+                    <input type="text" name="mitre_tactic" placeholder="Initial Access"
+                        style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.85rem;box-sizing:border-box;">
+                </div>
+
+                <div>
+                    <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;">Description</label>
+                    <textarea name="description" placeholder="Brief note about this rule…" rows="2"
+                        style="width:100%;margin-top:4px;padding:8px 10px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.85rem;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+
+                <button type="submit"
+                    style="width:100%;padding:10px;background:linear-gradient(135deg,#408A71,#285A48);border:none;border-radius:8px;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;letter-spacing:0.3px;">
+                    🚀 Deploy to Engine
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Engine Info Panel -->
+    <div class="table-card" style="padding:18px 20px;">
+        <h4 style="margin:0 0 14px;font-size:0.9rem;color:var(--text-primary);">⚙️ How the Engine Works</h4>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.55;">
+            <div style="display:flex;gap:10px;align-items:flex-start;">
+                <span style="color:#408A71;font-size:1rem;flex-shrink:0;">①</span>
+                <span>Every anomaly flagged by the HADES AI pipeline is passed to the signature engine for secondary validation.</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start;">
+                <span style="color:#408A71;font-size:1rem;flex-shrink:0;">②</span>
+                <span>Each active rule's PCRE pattern is matched against the raw flow data using case-insensitive regex.</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start;">
+                <span style="color:#408A71;font-size:1rem;flex-shrink:0;">③</span>
+                <span>On a match, the flow is <strong style="color:#ff6b6b;">DROPPED</strong> and the source IP is added to the block list automatically.</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start;">
+                <span style="color:#408A71;font-size:1rem;flex-shrink:0;">④</span>
+                <span>Hit counts increment per match — sort by hits to find your most triggered rules.</span>
+            </div>
+        </div>
+    </div>
+
+</div><!-- end right col -->
+</div><!-- end grid -->
+
+{% endblock %}

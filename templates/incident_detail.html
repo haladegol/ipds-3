@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Incident #{{ log.id }}{% endblock %}
+{% block page_title %}Incident Details{% endblock %}
+{% block page_subtitle %}Deep analysis of incident #{{ log.id }} — {{ log.attack_category or 'Unknown' }}{% endblock %}
+
+{% block content %}
+<!-- Incident Hero -->
+<div class="incident-hero">
+    <div class="incident-hero-left">
+        <div class="incident-id-badge">#{{ log.id }}</div>
+        <div class="incident-hero-info">
+            <h2>{{ log.specific_attack or log.attack_category or 'Unknown Attack' }}</h2>
+            <div class="incident-meta">
+                <span class="severity-badge {{ log.severity }}">{{ log.severity|upper }} (CVSS {{ log.severity|cvss }})</span>
+                <span class="category-badge {{ log.attack_category|lower|replace('+','') if log.attack_category else '' }}">{{ log.attack_category or 'N/A' }}</span>
+                <span class="incident-time">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}
+                </span>
+                <span class="incident-detected">Detected by: <strong>{{ log.detected_by or 'stage2.1' }}</strong></span>
+            </div>
+        </div>
+    </div>
+    <div class="incident-hero-actions">
+        <a href="{{ url_for('response.index') }}" class="action-btn-lg danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            Block Source IP
+        </a>
+    </div>
+</div>
+
+<!-- Network Info Cards -->
+<div class="stats-grid" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value" style="font-size:1.1rem;">{{ display_src_ip }}</span>
+            <span class="stat-label">Source IP{% if display_src_port %} : {{ display_src_port }}{% endif %}</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value" style="font-size:1.1rem;">{{ display_dst_ip }}</span>
+            <span class="stat-label">Destination IP{% if display_dst_port %} : {{ display_dst_port }}{% endif %}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value" style="font-size:1.1rem;">{{ log.filename }}</span>
+            <span class="stat-label">Source File</span>
+        </div>
+    </div>
+</div>
+
+<!-- Two-column layout -->
+<div class="charts-row">
+    <!-- Why Flagged (Explainable AI) -->
+    <div class="chart-card">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🧠 Why Was This Flagged?</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">Explainable AI
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        </div>
+        <div style="padding:20px;">
+            <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:16px;">{{ description }}</p>
+            
+            <div class="explain-section">
+                <div class="explain-label">MITRE ATT&CK Mapping</div>
+                <div class="explain-grid">
+                    <div class="explain-item">
+                        <span class="explain-key">Tactic</span>
+                        <span class="explain-val">{{ mitre.tactic }}</span>
+                    </div>
+                    <div class="explain-item">
+                        <span class="explain-key">Technique</span>
+                        <span class="explain-val">{{ mitre.technique }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="explain-section" style="margin-top:16px;">
+                <div class="explain-label">Severity Rationale</div>
+                <p style="color:var(--text-secondary); font-size:0.82rem; padding:8px 0;">{{ mitre.severity_rationale }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pipeline Decision Path -->
+    <div class="chart-card">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🔬 Pipeline Decision Path</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">3-Stage Analysis
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        </div>
+        <div style="padding:20px;">
+            <div class="decision-path">
+                <div class="decision-stage">
+                    <div class="decision-num stage-1-color">1</div>
+                    <div class="decision-info">
+                        <h4>Binary Classification</h4>
+                        <p>Result: <strong style="color:var(--red);">{{ decision_path.stage1.result }}</strong></p>
+                    </div>
+                </div>
+                <div class="decision-connector">↓</div>
+                <div class="decision-stage">
+                    <div class="decision-num stage-2-color">2</div>
+                    <div class="decision-info">
+                        <h4>Category Detection ({{ decision_path.stage2.method }})</h4>
+                        <p>Category: <strong>{{ decision_path.stage2.category }}</strong></p>
+                    </div>
+                </div>
+                <div class="decision-connector">↓</div>
+                <div class="decision-stage">
+                    <div class="decision-num stage-3-color">3</div>
+                    <div class="decision-info">
+                        <h4>Specific Attack</h4>
+                        <p>Attack: <strong>{{ decision_path.stage3.specific or 'Unknown' }}</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Importance -->
+<div class="chart-card" style="margin-bottom:24px;">
+    <div class="chart-header">
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>📊 Feature Importance Analysis</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+        <div class="chart-badge">Top 20 Features
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis outlines specific metadata attributes (e.g., Flow Duration, Packet Length StdDev) extracted by deep packet inspection, while the Y-Axis quantifies their statistical weight in driving the classifier’s localized threat detection logic.
+</div>
+    </div>
+    <div style="padding:20px;">
+        <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:16px;">
+            These features contributed most to the model's decision to classify this traffic as <strong>{{ log.attack_category }}</strong>.
+        </p>
+        <div class="feature-bars">
+            {% for f in feature_importance[:15] %}
+            <div class="feature-bar-row">
+                <span class="feature-name">{{ f.name }}</span>
+                <div class="feature-bar-track">
+                    <div class="feature-bar-fill {% if loop.index <= 3 %}top-feature{% endif %}" style="width:{{ f.percentage * 2 }}%; animation-delay: {{ loop.index * 0.05 }}s;"></div>
+                </div>
+                <span class="feature-pct">{{ f.percentage }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Related Incidents -->
+{% if related %}
+<div class="table-card">
+    <div class="table-header">
+        <h3>Related Incidents ({{ log.attack_category }})</h3>
+        <span class="table-count">{{ related|length }} incidents</span>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Time</th>
+                    <th>Specific Attack</th>
+                    <th>Severity</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in related %}
+                <tr>
+                    <td>#{{ r.id }}</td>
+                    <td class="td-time">{{ r.timestamp.strftime('%Y-%m-%d %H:%M') if r.timestamp else 'N/A' }}</td>
+                    <td><strong>{{ r.specific_attack or 'Unknown' }}</strong></td>
+                    <td><span class="severity-badge {{ r.severity }}">{{ r.severity|upper }} (CVSS {{ r.severity|cvss }})</span></td>
+                    <td><a href="{{ url_for('incidents.detail', log_id=r.id) }}" class="action-btn">View</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

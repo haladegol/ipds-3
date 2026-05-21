@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Admin — Stage 2 Category Classifiers{% endblock %}
+{% block page_title %}🔬 Stage 2: Category Classifiers{% endblock %}
+{% block page_subtitle %}Stage 2.1 (5 Binary Models) + Stage 2.2 (Multiclass Fallback linked to Stage 1){% endblock %}
+
+{% block content %}
+<!-- Active Session Alert -->
+{% if stats.active_session %}
+<div class="alert alert-info" style="margin-bottom:24px; border-left:4px solid var(--accent-blue); background:rgba(116,192,252,0.1); padding:16px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <div class="spinner-small"></div>
+        <div>
+            <strong>LIVE: Analysis in Progress</strong><br>
+            <span style="font-size:0.9em; opacity:0.8;">Currently analyzing dataset: <code>{{ stats.active_session.filename }}</code></span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Stage 2.1 Overview -->
+<div class="table-card" style="margin-bottom:24px;">
+    <div class="table-header"><h3>⚡ {{ model.stage2_1.name }}</h3></div>
+    <div style="padding:20px;">
+        <p style="color:var(--text-muted);margin-bottom:16px;">{{ model.stage2_1.type }} — Each category has its own binary classifier. An anomaly is tested against all in parallel.</p>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead><tr><th>Category</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>Parameters</th><th>Detections</th></tr></thead>
+                <tbody>
+                    {% for cat in model.stage2_1.categories %}
+                    <tr>
+                        <td><span class="category-badge {{ cat.name|lower|replace('+','') }}">{{ cat.name }}</span></td>
+                        <td><strong>{{ cat.accuracy }}%</strong></td>
+                        <td>{{ cat.precision }}%</td>
+                        <td>{{ cat.recall }}%</td>
+                        <td><code style="font-size:0.8em; opacity:0.7;">est:{{cat.params.n_estimators}}, depth:{{cat.params.max_depth}}</code></td>
+                        <td>{{ cat.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Stage 2.2 Internal State -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🧠 {{ model.stage2_2.name }}</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding:20px;">
+            <table class="data-table">
+                <tbody>
+                    <tr><td class="td-label">Algorithm</td><td><strong>{{ model.stage2_2.type }}</strong></td></tr>
+                    {% for key, val in model.stage2_2.params.items() %}
+                    {% if key != 'attack_types_monitored' %}
+                    <tr><td class="td-label">{{ key }}</td><td><code>{{ val }}</code></td></tr>
+                    {% endif %}
+                    {% endfor %}
+                    <tr><td class="td-label">Benchmark Accuracy</td><td><strong>{{ model.stage2_2.metrics.accuracy }}%</strong></td></tr>
+                    <tr><td class="td-label">Detections (Fallback)</td><td><strong>{{ model.stage2_2.detected }}</strong></td></tr>
+                    <tr><td class="td-label">Coverage</td><td>{{ model.stage2_2.params.attack_types_monitored }} Attack Types</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>📊 Confusion Matrix (Stage 2.2 Benchmark)</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The axes represent True versus Predicted classifications yielded by the HADES validation pipeline. The diagonal highlights verified true-positive and true-negative accuracy, while off-diagonal cells quantify exact misclassification (False Positive/Negative) bleed rates.
+</div>
+        <div style="padding:20px;">
+            <div class="confusion-matrix">
+                <div class="cm-header"></div>
+                <div class="cm-header"><strong>Pred Normal</strong></div>
+                <div class="cm-header"><strong>Pred Anomaly</strong></div>
+                <div class="cm-label"><strong>Actual Normal</strong></div>
+                <div class="cm-cell cm-tn">TN<br><span>{{ (model.stage2_2.metrics.confusion_matrix.TN * 100)|round(1) }}%</span></div>
+                <div class="cm-cell cm-fp">FP<br><span>{{ (model.stage2_2.metrics.confusion_matrix.FP * 100)|round(1) }}%</span></div>
+                <div class="cm-label"><strong>Actual Anomaly</strong></div>
+                <div class="cm-cell cm-fn">FN<br><span>{{ (model.stage2_2.metrics.confusion_matrix.FN * 100)|round(1) }}%</span></div>
+                <div class="cm-cell cm-tp">TP<br><span>{{ (model.stage2_2.metrics.confusion_matrix.TP * 100)|round(1) }}%</span></div>
+            </div>
+            <div style="margin-top:20px; font-size:0.85em; opacity:0.7; text-align:center;">
+                * Global multiclass performance on CIC-IDS 2018
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Category Distribution (Current)</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis displays macroscopic threat classes (e.g., Botnet, DDoS, Web Attacks) detected by the HADES Stage 2 ML engine, while the Y-Axis quantifies the aggregate volume of malicious flows isolated within each respective category.
+</div>
+        <div class="chart-body"><canvas id="catChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Detection Method: 2.1 vs 2.2</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis compares operational throughput between the primary Stage 2.1 classifiers and the Stage 2.2 multiclass fallback model, while the Y-Axis highlights total detected flow volume, quantifying engine efficacy and failover resilience.
+</div>
+        <div class="chart-body"><canvas id="methodChart"></canvas></div>
+    </div>
+</div>
+
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Severity Distribution</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis categorizes alerts by dynamic risk tiers (Internal CVSS mapping), while the Y-Axis visualizes the total frequency of intrusion events, assisting SOC analysts in prioritizing high-impact threat remediation.
+</div>
+        <div class="chart-body"><canvas id="sevChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-header">
+<div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Per-Category Accuracy %</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The X-Axis displays macroscopic threat classes (e.g., Botnet, DDoS, Web Attacks) detected by the HADES Stage 2 ML engine, while the Y-Axis quantifies the aggregate volume of malicious flows isolated within each respective category.
+</div>
+        <div class="chart-body"><canvas id="catAccChart"></canvas></div>
+    </div>
+</div>
+
+<!-- Logs -->
+<div class="table-card">
+    <div class="table-header"><h3>Recent Category Detections</h3></div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Time</th><th>Category</th><th>Detected By</th><th>Severity</th></tr></thead>
+            <tbody>
+                {% for log in logs %}
+                {% if log.attack_category %}
+                <tr>
+                    <td class="td-time">{{ log.timestamp.strftime('%H:%M:%S') if log.timestamp else '—' }}</td>
+                    <td><span class="category-badge {{ log.attack_category|lower|replace('+','') }}">{{ log.attack_category }}</span></td>
+                    <td><span class="status-badge {{ 'completed' if log.detected_by == 'stage2.1' else 'warning' }}">{{ log.detected_by|replace('stage', 'STAGE ') }}</span></td>
+                    <td><span class="severity-badge {{ log.severity }}">{{ log.severity|upper }} (CVSS {{ log.severity|cvss }})</span></td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div style="display:flex; gap:12px; justify-content:center; padding:16px;">
+    <a href="{{ url_for('admin.stage1') }}" class="btn-primary" style="background:var(--green-mid);">← Stage 1</a>
+    <a href="{{ url_for('admin.stage3') }}" class="btn-primary">Stage 3 →</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const C = {g:'#408A71',gl:'#B0E4CC',r:'#ff6b6b',p:'#a29bfe',o:'#ffa94d',y:'#ffd43b',pk:'#f783ac',b:'#74c0fc',bg:'#091413'};
+const catColors = {'DOS+DDOS':C.r,'BOTNET':C.p,'INFILTRATION':C.o,'WEB_ATTACKS':C.pk,'BRUTE_FORCE':C.y};
+Chart.defaults.color='#e2e8f0'; Chart.defaults.font.family="'Inter',sans-serif";
+const opts = {responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{color:'#e2e8f0'}}}};
+
+// Category Distribution
+const catData = {{ model.distribution|tojson }};
+if (Object.keys(catData).length > 0) {
+    new Chart(document.getElementById('catChart'),{type:'doughnut',data:{labels:Object.keys(catData),datasets:[{data:Object.values(catData),backgroundColor:Object.keys(catData).map(k=>catColors[k]||C.gl),borderColor:C.bg,borderWidth:3}]},options:opts});
+}
+
+// Detection Method
+new Chart(document.getElementById('methodChart'),{type:'doughnut',data:{labels:['Stage 2.1','Stage 2.2'],datasets:[{data:[{{ model.stage2_1.detected }},{{ model.stage2_2.detected }}],backgroundColor:[C.g+'88',C.o+'88'],borderColor:[C.g,C.o],borderWidth:2}]},options:opts});
+
+// Severity
+const sevData = {{ model.severity|tojson }};
+const sevColors = {info:C.b,low:C.g,medium:C.o,high:C.pk,critical:C.r};
+if (Object.keys(sevData).length > 0) {
+    new Chart(document.getElementById('sevChart'),{type:'doughnut',data:{labels:Object.keys(sevData).map(s=>s.toUpperCase()),datasets:[{data:Object.values(sevData),backgroundColor:Object.keys(sevData).map(k=>sevColors[k]||'#666'),borderColor:C.bg,borderWidth:3}]},options:opts});
+}
+
+// Per-Category Accuracy Bar
+const cats = [{% for cat in model.stage2_1.categories %}'{{cat.name}}',{% endfor %}];
+const accs = [{% for cat in model.stage2_1.categories %}{{cat.accuracy}},{% endfor %}];
+new Chart(document.getElementById('catAccChart'),{type:'bar',data:{labels:cats,datasets:[{label:'Accuracy %',data:accs,backgroundColor:cats.map(c=>(catColors[c]||C.gl)+'88'),borderColor:cats.map(c=>catColors[c]||C.gl),borderWidth:1,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:90,max:100,ticks:{color:'#e2e8f0'},grid:{color:'rgba(64,138,113,0.08)'}},x:{ticks:{color:'#e2e8f0'},grid:{display:false}}},plugins:{legend:{display:false}}}});
+</script>
+{% endblock %}
+

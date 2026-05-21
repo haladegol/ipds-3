@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Admin Login{% endblock %}
+{% block content %}
+<div class="auth-card" style="margin: 0 auto; max-width: 450px;">
+    <div class="auth-card-inner">
+        <div class="auth-header">
+            <div class="auth-logo">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#ffa94d;">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+            </div>
+            <h2>Admin Access</h2>
+            <p class="auth-subtitle">Enter admin credentials to access AI model internals</p>
+        </div>
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label>Admin Password</label>
+                <input type="password" name="admin_password" placeholder="Enter admin password" required autofocus>
+            </div>
+            <button type="submit" class="btn-primary" style="width:100%;">🔐 Authenticate</button>
+        </form>
+        <div class="auth-footer">
+            <a href="{{ url_for('dashboard.index') }}">← Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

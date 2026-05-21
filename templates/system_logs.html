@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}System Logs{% endblock %}
+{% block page_title %}System Events{% endblock %}
+{% block page_subtitle %}HADES application engine logs and audits{% endblock %}
+
+{% block content %}
+<div class="table-card">
+    <div class="table-header">
+        <h3>System Audit Trail</h3>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Level</th>
+                    <th>Event</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="td-time">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><span class="status-badge {{ log.level|lower }}">{{ log.level }}</span></td>
+                    <td><strong>{{ log.event }}</strong></td>
+                    <td style="font-size: 0.85rem; color: var(--text-secondary);">{{ log.details }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="empty-state">No system logs recorded yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

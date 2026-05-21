@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HADES Hybrid (IPS+IDS){% endblock %} | HADES Final 2</title>
+    <meta name="description" content="HADES - Hierarchical Anomaly Detection & Elimination System">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/hades_logo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+    {% if current_user.is_authenticated %}
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <img src="{{ url_for('static', filename='img/hades_logo.png') }}" alt="HADES" width="36" height="36" style="border-radius:8px;">
+                </div>
+                <span class="logo-text">HADES <span class="logo-version">Hybrid (IPS+IDS)</span></span>
+            </div>
+        </div>
+
+        <div class="nav-links">
+            <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('live_monitor.index') }}" class="nav-item {% if request.endpoint == 'live_monitor.index' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Live Monitoring</span>
+            </a>
+            <a href="{{ url_for('threats.index') }}" class="nav-item {% if request.endpoint == 'threats.index' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span>Threat Intelligence</span>
+            </a>
+            <a href="{{ url_for('network.index') }}" class="nav-item {% if request.endpoint == 'network.index' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span>Network Overview</span>
+            </a>
+            <a href="{{ url_for('analysis.upload_page') }}" class="nav-item {% if request.endpoint and 'analysis' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Upload & Analyze</span>
+            </a>
+            <a href="{{ url_for('analysis.attack_logs') }}" class="nav-item" id="nav-logs">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <span>Attack Logs</span>
+            </a>
+            <a href="{{ url_for('timeline.index') }}" class="nav-item {% if request.endpoint == 'timeline.index' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="4"/><polyline points="6 10 12 4 18 10"/><circle cx="12" cy="20" r="2"/></svg>
+                <span>Alert Timeline</span>
+            </a>
+            <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.endpoint == 'reports.index' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+                <span>Reports</span>
+            </a>
+
+            <div class="nav-divider"></div>
+            <div class="nav-label">Tools</div>
+            <a href="{{ url_for('simulation.index') }}" class="nav-item nav-tool {% if request.endpoint and 'simulation' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Simulation Lab</span>
+            </a>
+
+            <div class="nav-divider"></div>
+            <div class="nav-label">Settings</div>
+            <a href="{{ url_for('settings.index') }}" class="nav-item {% if request.endpoint and 'settings' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                <span>Settings</span>
+            </a>
+
+            {% if current_user.is_admin %}
+            <div class="nav-divider"></div>
+            <div class="nav-label" style="color: var(--orange);">HADES HYBRID (IDS+IPS)</div>
+            <a href="{{ url_for('hybrid.index') }}" class="nav-item nav-admin {% if request.endpoint and 'hybrid' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                <span>Hybrid Console</span>
+            </a>
+            <a href="{{ url_for('response.index') }}" class="nav-item nav-admin {% if request.endpoint and 'response' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+                <span>Active Threat Defense</span>
+            </a>
+
+            <div class="nav-divider"></div>
+            <div class="nav-label">Admin Panel</div>
+            <a href="{{ url_for('model_insights.stage1') }}" class="nav-item nav-admin {% if request.endpoint and 'model_insights' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                <span>Model Insights</span>
+            </a>
+            <a href="{{ url_for('analysis.system_logs') }}" class="nav-item nav-admin" id="nav-system-logs">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>System Logs</span>
+            </a>
+            <a href="{{ url_for('database.explorer') }}" class="nav-item nav-admin {% if request.endpoint and 'database' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                <span>Database Viewer</span>
+            </a>
+            <a href="{{ url_for('signatures.index') }}" class="nav-item nav-admin {% if request.endpoint and 'signatures' in request.endpoint %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="12 11 12 17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                <span>Signature Management</span>
+            </a>
+            <a href="{{ url_for('admin.stage1') }}" class="nav-item nav-admin {% if request.endpoint == 'admin.stage1' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                <span>Stage 1 Model</span>
+            </a>
+            <a href="{{ url_for('admin.stage2') }}" class="nav-item nav-admin {% if request.endpoint == 'admin.stage2' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                <span>Stage 2 Models</span>
+            </a>
+            <a href="{{ url_for('admin.stage3') }}" class="nav-item nav-admin {% if request.endpoint == 'admin.stage3' %}active{% endif %}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Stage 3 Models</span>
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="user-block" style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                <div class="user-avatar" style="flex-shrink: 0;">{{ current_user.username[0]|upper }}</div>
+                <div class="user-info-text" style="flex: 1; min-width: 0;">
+                    <div class="user-name" style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ current_user.username }}</div>
+                    <div class="user-role-row" style="margin-top: 2px;">
+                        <span class="user-role" style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">{{ 'Admin' if current_user.is_admin else 'Analyst' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                <p class="page-subtitle">{% block page_subtitle %}Network threat intelligence overview{% endblock %}</p>
+            </div>
+            <div class="top-bar-actions" style="display: flex; gap: 10px; align-items: center;">
+                <a href="{{ url_for('auth.logout') }}" class="logout-btn" title="Logout" style="background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.2); border-radius: 10px; padding: 8px 16px; color: var(--red); display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 0.85rem; transition: all 0.3s ease;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </a>
+                <a href="{{ url_for('account.index') }}" title="My Account" style="background: rgba(64,138,113,0.08); border: 1px solid rgba(64,138,113,0.2); border-radius: 10px; padding: 8px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: all 0.3s ease;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </a>
+                <button class="theme-toggle theme-btn" id="theme-toggle-in" title="Toggle Theme">
+                    <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash-msg flash-{{ category }}">
+                <span>{{ message }}</span>
+                <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="content-area">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════
+         HADES AI CHATBOT WIDGET
+         ═══════════════════════════════════════════ -->
+    <div class="hades-chat-fab" id="chatFab" title="Ask HADES AI">
+        <img src="{{ url_for('static', filename='img/hades_avatar.png') }}" alt="HADES" class="chat-fab-img">
+        <div class="chat-fab-pulse"></div>
+    </div>
+
+    <div class="hades-chat-window" id="chatWindow">
+        <div class="hades-chat-header">
+            <div class="hades-chat-header-left">
+                <img src="{{ url_for('static', filename='img/hades_avatar.png') }}" alt="HADES" class="hades-chat-avatar">
+                <div class="hades-chat-title">
+                    <strong>HADES AI</strong>
+                    <span class="hades-chat-status"><span class="hades-online-dot"></span> Online</span>
+                </div>
+            </div>
+            <div class="hades-chat-header-actions">
+                <button class="hades-chat-clear" id="chatClear" title="Clear chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+                <button class="hades-chat-close" id="chatClose">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="hades-chat-body" id="chatBody">
+            <div class="hades-chat-welcome">
+                <img src="{{ url_for('static', filename='img/hades_avatar.png') }}" alt="HADES" class="hades-welcome-avatar">
+                <h3>HADES AI Guardian</h3>
+                <p class="hades-welcome-sub">Hierarchical Anomaly Detection & Elimination System</p>
+                <p class="hades-welcome-desc">I'm your AI-powered cybersecurity assistant. Ask me about threats, IDS operations, attack types, or system status.</p>
+                <div class="hades-quick-actions">
+                    <button class="hades-quick-btn" data-msg="summary">What happened today?</button>
+                    <button class="hades-quick-btn" data-msg="biggest threat">Who is our biggest threat?</button>
+                    <button class="hades-quick-btn" data-msg="status">Detailed System Status</button>
+                    <button class="hades-quick-btn" data-msg="How to analyze traffic?">Analyze Traffic</button>
+                    <button class="hades-quick-btn" data-msg="security best practices">Best Practices</button>
+                    <button class="hades-quick-btn" data-msg="help">What can you do?</button>
+                </div>
+
+            </div>
+        </div>
+        <div class="hades-chat-input-area">
+            <input type="text" class="hades-chat-input" id="chatInput" placeholder="Ask HADES about cybersecurity..." autocomplete="off">
+            <button class="hades-chat-send" id="chatSend">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Auth pages (no sidebar) -->
+    <!-- Global theme toggle (auth pages only) -->
+    <button class="theme-toggle global-toggle theme-btn" id="theme-toggle" title="Toggle Theme" style="position:fixed; top:20px; right:20px; z-index:9999;">
+        <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    </button>
+    <div class="auth-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash-msg flash-{{ category }}">
+                <span>{{ message }}</span>
+                <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% block auth_content %}{% endblock %}
+    </div>
+    {% endif %}
+
+    <script>
+        // Theme Toggle Logic — supports both buttons, swaps sun/moon icons
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            if (savedTheme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+            function updateIcons() {
+                const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.classList.toggle('is-light', isLight);
+                });
+            }
+            function toggleTheme() {
+                const current = document.documentElement.getAttribute('data-theme');
+                const next = current === 'light' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                updateIcons();
+            }
+            // Bind ALL theme toggle buttons
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.addEventListener('click', toggleTheme);
+            });
+            updateIcons();
+
+            // Active link highlighting for hash routes
+            window.addEventListener('hashchange', () => {
+                if (window.location.hash === '#logs-section') {
+                    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                    const navLogs = document.getElementById('nav-logs');
+                    if (navLogs) navLogs.classList.add('active');
+                }
+            });
+        })();
+    </script>
+
+    {% if current_user.is_authenticated %}
+    <script>
+    // ═══════════════════════════════════════════════════════
+    // HADES AI CHATBOT ENGINE
+    // ═══════════════════════════════════════════════════════
+    (function() {
+        const fab = document.getElementById('chatFab');
+        const win = document.getElementById('chatWindow');
+        const closeBtn = document.getElementById('chatClose');
+        const clearBtn = document.getElementById('chatClear');
+        const input = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('chatSend');
+        const body = document.getElementById('chatBody');
+        let isOpen = false;
+
+        // Toggle chat
+        fab.addEventListener('click', () => {
+            isOpen = !isOpen;
+            win.classList.toggle('open', isOpen);
+            fab.classList.toggle('hidden', isOpen);
+            if (isOpen) input.focus();
+        });
+        closeBtn.addEventListener('click', () => {
+            isOpen = false;
+            win.classList.remove('open');
+            fab.classList.remove('hidden');
+        });
+
+        // Clear chat
+        clearBtn.addEventListener('click', () => {
+            body.innerHTML = `
+                <div class="hades-chat-welcome">
+                    <img src="/static/img/hades_avatar.png" alt="HADES" class="hades-welcome-avatar">
+                    <h3>HADES AI Guardian</h3>
+                    <p class="hades-welcome-sub">Chat cleared. How can I help?</p>
+                </div>`;
+        });
+
+        // Send message
+        function sendMessage(text) {
+            if (!text.trim()) return;
+
+            // Remove welcome screen
+            const welcome = body.querySelector('.hades-chat-welcome');
+            if (welcome) welcome.remove();
+
+            // Add user message
+            appendMsg('user', text);
+            input.value = '';
+
+            // Show typing indicator
+            const typingId = showTyping();
+
+            fetch('/chatbot/message', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: text}),
+            })
+            .then(r => r.json())
+            .then(data => {
+                removeTyping(typingId);
+                appendMsg('bot', data.reply, data.timestamp);
+            })
+            .catch(() => {
+                removeTyping(typingId);
+                appendMsg('bot', 'Connection error. HADES is running diagnostics...');
+            });
+        }
+
+        function appendMsg(role, text, time) {
+            const div = document.createElement('div');
+            div.className = `hades-msg hades-msg-${role}`;
+            
+            const timeStr = time || new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            
+            if (role === 'bot') {
+                div.innerHTML = `
+                    <img src="/static/img/hades_avatar.png" alt="H" class="hades-msg-avatar">
+                    <div class="hades-msg-content">
+                        <div class="hades-msg-bubble">${renderMarkdown(text)}</div>
+                        <span class="hades-msg-time">${timeStr}</span>
+                    </div>`;
+            } else {
+                div.innerHTML = `
+                    <div class="hades-msg-content">
+                        <div class="hades-msg-bubble">${escapeHtml(text)}</div>
+                        <span class="hades-msg-time">${timeStr}</span>
+                    </div>`;
+            }
+            body.appendChild(div);
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function showTyping() {
+            const id = 'typing-' + Date.now();
+            const div = document.createElement('div');
+            div.className = 'hades-msg hades-msg-bot';
+            div.id = id;
+            div.innerHTML = `
+                <img src="/static/img/hades_avatar.png" alt="H" class="hades-msg-avatar">
+                <div class="hades-msg-content">
+                    <div class="hades-msg-bubble hades-typing">
+                        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                    </div>
+                </div>`;
+            body.appendChild(div);
+            body.scrollTop = body.scrollHeight;
+            return id;
+        }
+
+        function removeTyping(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function renderMarkdown(text) {
+            // Simple markdown rendering
+            let html = escapeHtml(text);
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+            html = html.replace(/\n- /g, '\n<br>• ');
+            html = html.replace(/\n\n/g, '<br><br>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', () => sendMessage(input.value));
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(input.value); });
+
+        // Quick action buttons
+        document.querySelectorAll('.hades-quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => sendMessage(btn.dataset.msg));
+        });
+    })();
+    </script>
+    {% endif %}
+
+    <!-- Global Chart.js Dynamic Animations -->
+    <script>
+        if (typeof Chart !== 'undefined') {
+            if (Chart.defaults.animation) {
+                Chart.defaults.animation.duration = 2000;
+                Chart.defaults.animation.easing = 'easeOutElastic';
+                if (Chart.defaults.animation.delay) {
+                    delete Chart.defaults.animation.delay;
+                }
+            } else {
+                Chart.defaults.animation = { duration: 2000, easing: 'easeOutElastic' };
+            }
+            Chart.defaults.elements.bar.borderRadius = 4;
+            Chart.defaults.elements.line.tension = 0.4;
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

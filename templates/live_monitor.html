@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block title %}Live Monitor{% endblock %}
+{% block page_title %}Live Network Monitor{% endblock %}
+{% block page_subtitle %}HADES IDS+IPS — real-time analysis from your dataset{% endblock %}
+
+{% block content %}
+<style>
+.lm-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(64,138,113,0.07);border:1px solid rgba(64,138,113,0.18);border-radius:10px;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
+.lm-grid{display:grid;grid-template-columns:1fr 270px;gap:18px;align-items:start;}
+.lm-card{background:var(--card-bg,rgba(9,20,19,0.8));border:1px solid rgba(64,138,113,0.15);border-radius:10px;padding:16px 18px;margin-bottom:14px;}
+.lm-card h4{margin:0 0 12px;font-size:0.88rem;}
+.kv{display:flex;justify-content:space-between;font-size:0.8rem;padding-bottom:7px;border-bottom:1px solid rgba(64,138,113,0.07);margin-bottom:7px;}
+.kv:last-child{border:none;margin:0;padding:0;}
+.kv span:first-child{color:var(--text-muted);}
+.kv strong{font-family:'JetBrains Mono',monospace;font-size:0.78rem;}
+.alert-row{padding:11px 14px;border-radius:8px;background:rgba(64,138,113,0.04);border:1px solid rgba(64,138,113,0.1);border-left-width:3px;margin-bottom:7px;animation:fadeIn .35s ease;}
+.alert-row.sev-critical{border-left-color:#ff4444;}
+.alert-row.sev-high{border-left-color:#ffa94d;}
+.alert-row.sev-medium{border-left-color:#f9ca24;}
+.alert-row.sev-low{border-left-color:#40c571;}
+.alert-row.sev-info{border-left-color:#a29bfe;}
+.alert-row:hover{background:rgba(64,138,113,0.09);}
+.atag{display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;padding:1px 7px;border-radius:4px;font-weight:600;}
+.atag.ips{background:rgba(64,197,113,0.12);color:#40c571;border:1px solid rgba(64,197,113,0.25);}
+.atag.ids{background:rgba(162,155,254,0.1);color:#a29bfe;border:1px solid rgba(162,155,254,0.2);}
+.atag.cat{background:rgba(64,138,113,0.12);color:#408A71;border:1px solid rgba(64,138,113,0.2);}
+.atag.cvss-c{background:rgba(255,68,68,0.1);color:#ff4444;}
+.atag.cvss-h{background:rgba(255,169,77,0.1);color:#ffa94d;}
+.atag.cvss-m{background:rgba(249,202,36,0.1);color:#f9ca24;}
+.atag.cvss-l{background:rgba(64,197,113,0.1);color:#40c571;}
+.atag.cvss-i{background:rgba(162,155,254,0.1);color:#a29bfe;}
+.meta{font-size:0.72rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;}
+.pulse-dot{width:9px;height:9px;border-radius:50%;background:#40c571;box-shadow:0 0 7px #40c571;display:inline-block;animation:pulse 1.5s infinite;}
+.bar-bg{height:4px;background:rgba(64,138,113,0.12);border-radius:2px;margin-top:3px;}
+.bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#408A71,#40c571);transition:width .5s;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
+select.lm-sel{padding:6px 9px;background:rgba(64,138,113,0.06);border:1px solid rgba(64,138,113,0.2);border-radius:7px;color:var(--text-primary);font-size:0.8rem;}
+.feed-wrap{max-height:700px;overflow-y:auto;padding-right:3px;}
+.feed-wrap::-webkit-scrollbar{width:4px;}
+.feed-wrap::-webkit-scrollbar-thumb{background:rgba(64,138,113,0.3);border-radius:2px;}
+</style>
+
+<!-- Status Bar -->
+<div class="lm-bar">
+  <div style="display:flex;align-items:center;gap:9px;">
+    <span class="pulse-dot" id="liveDot"></span>
+    <span style="font-weight:700;font-size:0.83rem;" id="liveStatus">MONITORING ACTIVE</span>
+    <span style="font-size:0.73rem;color:var(--text-muted);">rotating feed · 5s refresh</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:0.78rem;">
+    <span>IPS: <strong id="ipsLabel" style="color:{% if bypass_mode %}#ffa94d{% elif ips_enabled and auto_block_critical %}#ffa94d{% elif ips_enabled and not auto_block_critical %}#40c571{% else %}#a29bfe{% endif %};">{% if bypass_mode %}Bypass{% elif ips_enabled and auto_block_critical %}Hybrid (Selective IPS){% elif ips_enabled and not auto_block_critical %}Active (Strict IPS){% else %}Passive (IDS Mode){% endif %}</strong></span>
+    <span>Blocked: <strong id="blockedLabel" style="color:#ff6b6b;">{{ active_blocks }}</strong></span>
+    <span>Sigs: <strong id="sigsLabel" style="color:#ffa94d;">{{ active_sigs }}</strong>/{{ total_sigs }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;color:#40c571;" id="clock">--:--:--</span>
+    <button onclick="togglePause()" style="display:flex;align-items:center;gap:5px;padding:4px 11px;background:rgba(64,138,113,0.1);border:1px solid rgba(64,138,113,0.25);border-radius:6px;color:var(--text-secondary);font-size:0.78rem;cursor:pointer;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="pauseIcon"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      <span id="pauseText">Pause</span>
+    </button>
+  </div>
+</div>
+
+<!-- Severity Cards with CVSS -->
+<div class="stats-grid" style="margin-bottom:18px;">
+  <div class="stat-card" style="border-left:3px solid #ff4444;">
+    <div class="stat-icon" style="background:rgba(255,68,68,0.12);color:#ff4444;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
+    <div class="stat-info">
+      <div class="stat-value" id="cntCrit" style="color:#ff4444;">{{ severity_counts.get('critical',0) }}</div>
+      <div class="stat-label">Critical · <span style="font-size:0.7rem;color:#ff4444;">CVSS 9.0–10.0</span></div>
+    </div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #ffa94d;">
+    <div class="stat-icon" style="background:rgba(255,169,77,0.12);color:#ffa94d;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/></svg></div>
+    <div class="stat-info">
+      <div class="stat-value" id="cntHigh" style="color:#ffa94d;">{{ severity_counts.get('high',0) }}</div>
+      <div class="stat-label">High · <span style="font-size:0.7rem;color:#ffa94d;">CVSS 7.0–8.9</span></div>
+    </div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #f9ca24;">
+    <div class="stat-icon" style="background:rgba(249,202,36,0.12);color:#f9ca24;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></div>
+    <div class="stat-info">
+      <div class="stat-value" id="cntMed" style="color:#f9ca24;">{{ severity_counts.get('medium',0) }}</div>
+      <div class="stat-label">Medium · <span style="font-size:0.7rem;color:#f9ca24;">CVSS 4.0–6.9</span></div>
+    </div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #40c571;">
+    <div class="stat-icon" style="background:rgba(64,197,113,0.12);color:#40c571;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div class="stat-info">
+      <div class="stat-value" id="cntLow" style="color:#40c571;">{{ severity_counts.get('low',0) }}</div>
+      <div class="stat-label">Low · <span style="font-size:0.7rem;color:#40c571;">CVSS 0.1–3.9</span></div>
+    </div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #a29bfe;">
+    <div class="stat-icon" style="background:rgba(162,155,254,0.12);color:#a29bfe;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+    <div class="stat-info">
+      <div class="stat-value" id="cntInfo" style="color:#a29bfe;">{{ severity_counts.get('info',0) }}</div>
+      <div class="stat-label">Info (Benign) · <span style="font-size:0.7rem;color:#a29bfe;">CVSS 0.0</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="lm-grid">
+<!-- LEFT: Feed -->
+<div>
+  <!-- Filters -->
+  <div style="display:flex;gap:9px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <select class="lm-sel" id="fSev"><option value="">All Severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info (Benign)</option></select>
+    <select class="lm-sel" id="fCat">
+      <option value="">All Categories</option>
+      {% for cat in category_counts %}<option value="{{ cat }}">{{ cat }} ({{ category_counts[cat] }})</option>{% endfor %}
+    </select>
+    <select class="lm-sel" id="fMode"><option value="">IDS + IPS</option><option value="ids">IDS Only</option><option value="ips">IPS Blocked</option></select>
+    <span style="font-size:0.77rem;color:var(--text-muted);margin-left:auto;">Showing <strong id="feedCount">—</strong> · page <strong id="pageNum">1</strong></span>
+  </div>
+  <div class="feed-wrap" id="liveFeed"></div>
+  <div id="emptyMsg" style="display:none;text-align:center;padding:50px;color:var(--text-muted);">No events match current filters.</div>
+</div>
+
+<!-- RIGHT: Panels -->
+<div>
+  <!-- Dataset (from AnalysisSession) -->
+  <div class="lm-card">
+    <h4>📊 Dataset · <span style="color:var(--text-muted);font-weight:400;font-size:0.75rem;" title="{{ dataset_filename }}">{{ dataset_filename[:28] }}{% if dataset_filename|length > 28 %}…{% endif %}</span></h4>
+    <div class="kv"><span>Total Flows (CSV)</span><strong id="dsFlows">{{ "{:,}".format(dataset_total_flows) }}</strong></div>
+    <div class="kv"><span>Normal Traffic</span><strong id="dsNormal" style="color:#40c571;">{{ "{:,}".format(dataset_normal_count) }}</strong></div>
+    <div class="kv"><span>Anomalous Flows</span><strong id="dsAnom" style="color:#ff6b6b;">{{ "{:,}".format(dataset_anomaly_count) }}</strong></div>
+    <div class="kv"><span>Detection Rate</span><strong id="dsRate" style="color:#ffa94d;">{{ detection_rate }}%</strong></div>
+    <div class="kv"><span>IPS Mitigated</span><strong id="dsIPS" style="color:#a29bfe;">{{ ips_mitigated }}</strong></div>
+  </div>
+
+  <!-- Engine State -->
+  <div class="lm-card">
+    <h4>⚙️ Engine State</h4>
+    <div class="kv"><span>IPS Mode</span><strong id="engIPS" style="color:{% if bypass_mode %}#ffa94d{% elif ips_enabled and auto_block_critical %}#ffa94d{% elif ips_enabled and not auto_block_critical %}#40c571{% else %}#a29bfe{% endif %};">{% if bypass_mode %}Bypass{% elif ips_enabled and auto_block_critical %}Hybrid (Selective IPS){% elif ips_enabled and not auto_block_critical %}Active (Strict IPS){% else %}Passive (IDS Mode){% endif %}</strong></div>
+    <div class="kv"><span>Bypass</span><strong id="engBypass" style="color:{{ '#ffa94d' if bypass_mode else '#40c571' }}">{{ 'ON' if bypass_mode else 'OFF' }}</strong></div>
+    <div class="kv"><span>Active Sigs</span><strong id="engSigs">{{ active_sigs }}</strong></div>
+    <div class="kv"><span>Blocked IPs</span><strong id="engBlocked" style="color:#ff6b6b;">{{ active_blocks }}</strong></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <a href="{{ url_for('hybrid.index') }}" class="action-btn" style="flex:1;text-align:center;font-size:0.76rem;padding:5px;">Console</a>
+      <a href="{{ url_for('response.index') }}" class="action-btn" style="flex:1;text-align:center;font-size:0.76rem;padding:5px;background:rgba(255,107,107,0.1);border-color:#ff6b6b;color:#ff6b6b;">Block IP</a>
+      <a href="{{ url_for('analysis.upload_page') }}" class="action-btn" style="flex:1;text-align:center;font-size:0.76rem;padding:5px;background:rgba(162,155,254,0.08);border-color:#a29bfe;color:#a29bfe;">Upload</a>
+    </div>
+  </div>
+
+  <!-- Attack Categories -->
+  <div class="lm-card">
+    <h4>🎯 Attack Categories</h4>
+    <div id="catBars">
+      {% set total_cats = category_counts.values()|sum %}
+      {% for cat, cnt in category_counts.items()|sort(attribute=1,reverse=True) %}
+      <div style="margin-bottom:9px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.77rem;margin-bottom:2px;">
+          <span style="color:var(--text-secondary);">{{ cat }}</span>
+          <span style="color:var(--text-muted);">{{ cnt }}</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" style="width:{{ ((cnt/total_cats)*100)|int if total_cats > 0 else 0 }}%;"></div></div>
+      </div>
+      {% else %}<p style="color:var(--text-muted);font-size:0.8rem;">No data yet.</p>{% endfor %}
+    </div>
+  </div>
+
+  <!-- CVSS Reference -->
+  <div class="lm-card">
+    <h4>🔢 CVSS v3.1 Reference</h4>
+    {% for sev, info in cvss_map.items() %}
+    <div class="kv">
+      <span style="text-transform:capitalize;">{{ sev }}</span>
+      <strong class="atag cvss-{{ sev[0] }}" style="font-family:'JetBrains Mono',monospace;">{{ info.label }}</strong>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const INIT_ALERTS = {{ alerts | tojson }};
+let paused = false, currentPage = 0;
+
+const CVSS_CLASS = {critical:'cvss-c',high:'cvss-h',medium:'cvss-m',low:'cvss-l',info:'cvss-i'};
+
+function esc(s){ return s==null?'—':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function buildCard(a){
+  const ipsTag = a.is_ips
+    ? `<span class="atag ips">🛡 IPS BLOCKED</span>`
+    : `<span class="atag ids">👁 IDS ALERT</span>`;
+  const cvssTag = `<span class="atag ${CVSS_CLASS[a.severity]||'cvss-l'}">${esc(a.cvss_label)} · ${a.cvss_score}</span>`;
+  const catTag  = `<span class="atag cat">${esc(a.category)}</span>`;
+  const mitreTag= a.mitre_id && a.mitre_id!=='—'
+    ? `<span class="atag ids" style="font-size:0.68rem;">${esc(a.mitre_id)} ${esc(a.mitre_tactic)}</span>` : '';
+  const flows   = a.anomaly_count > 0
+    ? `<span style="color:#ff6b6b;"><strong>${Number(a.anomaly_count).toLocaleString()}</strong> anomalous / ${Number(a.total_flows).toLocaleString()} flows</span>`
+    : `${Number(a.total_flows).toLocaleString()} flows`;
+
+  return `<div class="alert-row sev-${esc(a.severity)}" data-sev="${esc(a.severity)}" data-cat="${esc(a.category)}" data-ips="${a.is_ips}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">
+          <strong style="font-size:0.86rem;">${esc(a.specific)}</strong>
+          ${catTag} ${ipsTag} ${cvssTag} ${mitreTag}
+        </div>
+        <div class="meta">
+          <span style="font-family:'JetBrains Mono',monospace;">${esc(a.source_ip)} → ${esc(a.dest_ip)}</span>
+          <span>·</span><code style="font-size:0.7rem;background:rgba(64,138,113,0.1);padding:1px 5px;border-radius:3px;">${esc(a.detected_by)}</code>
+          <span>·</span>${flows}
+        </div>
+        <div class="meta" style="margin-top:3px;">
+          <span>📁 ${esc(a.filename)}</span>
+          <span>·</span><span>${esc(a.timestamp)}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderAlerts(alerts){
+  const sev   = document.getElementById('fSev').value;
+  const cat   = document.getElementById('fCat').value;
+  const mode  = document.getElementById('fMode').value;
+  let filtered = alerts.filter(a => {
+    if(sev && a.severity !== sev) return false;
+    if(cat && String(a.category).toUpperCase() !== String(cat).toUpperCase()) return false;
+    if(mode === 'ips' && !a.is_ips) return false;
+    if(mode === 'ids' && a.is_ips) return false;
+    return true;
+  });
+  const feed = document.getElementById('liveFeed');
+  const empty = document.getElementById('emptyMsg');
+  document.getElementById('feedCount').textContent = filtered.length;
+  if(!filtered.length){
+    feed.innerHTML='';
+    if(!sev && !cat && !mode){
+      empty.textContent = "No network events logged yet. Upload a dataset or run a simulation to begin monitoring.";
+    } else {
+      empty.textContent = "No events match current filters.";
+    }
+    empty.style.display='block';
+    return;
+  }
+  empty.style.display = 'none';
+  feed.innerHTML = filtered.map(buildCard).join('');
+}
+
+function poll(force){
+  if(paused && !force) return;
+  const sev = document.getElementById('fSev').value;
+  const cat = document.getElementById('fCat').value;
+  const mode = document.getElementById('fMode').value;
+  if(!force){
+    currentPage++;
+  }
+  let url = `/api/live-feed?page=${currentPage}`;
+  if(sev) url += `&severity=${sev}`;
+  if(cat) url += `&category=${encodeURIComponent(cat)}`;
+  if(mode) url += `&mode=${mode}`;
+
+  fetch(url).then(r=>r.json()).then(d=>{
+    // Update page tracker
+    document.getElementById('pageNum').textContent = (d.page||0)+1;
+
+    // Severity counters
+    document.getElementById('cntCrit').textContent = d.stats.critical||0;
+    document.getElementById('cntHigh').textContent = d.stats.high||0;
+    document.getElementById('cntMed').textContent  = d.stats.medium||0;
+    document.getElementById('cntLow').textContent  = d.stats.low||0;
+    document.getElementById('cntInfo').textContent = d.stats.info||0;
+
+    // Engine
+    const e = d.engine;
+    let modeText = 'Passive (IDS Mode)';
+    let modeColor = '#a29bfe';
+    if (e.bypass) {
+        modeText = 'Bypass';
+        modeColor = '#ffa94d';
+    } else if (e.ips_enabled && e.auto_block_critical) {
+        modeText = 'Hybrid (Selective IPS)';
+        modeColor = '#ffa94d';
+    } else if (e.ips_enabled && !e.auto_block_critical) {
+        modeText = 'Active (Strict IPS)';
+        modeColor = '#40c571';
+    }
+
+    document.getElementById('engIPS').textContent     = modeText;
+    document.getElementById('engIPS').style.color     = modeColor;
+    document.getElementById('engBypass').textContent  = e.bypass?'ON':'OFF';
+    document.getElementById('engBypass').style.color  = e.bypass?'#ffa94d':'#40c571';
+    document.getElementById('engSigs').textContent    = e.active_sigs;
+    document.getElementById('engBlocked').textContent = e.active_blocks;
+    document.getElementById('blockedLabel').textContent = e.active_blocks;
+    document.getElementById('sigsLabel').textContent  = e.active_sigs;
+    document.getElementById('ipsLabel').textContent   = modeText;
+    document.getElementById('ipsLabel').style.color   = modeColor;
+
+    // Dataset numbers (from AnalysisSession)
+    const ds = d.dataset;
+    document.getElementById('dsFlows').textContent  = Number(ds.total_flows).toLocaleString();
+    document.getElementById('dsNormal').textContent = Number(ds.normal_count).toLocaleString();
+    document.getElementById('dsAnom').textContent   = Number(ds.anomaly_count).toLocaleString();
+    document.getElementById('dsRate').textContent   = ds.detection_rate+'%';
+    document.getElementById('dsIPS').textContent    = ds.ips_mitigated;
+
+    // Category bars
+    if(d.categories && Object.keys(d.categories).length){
+      const total = Object.values(d.categories).reduce((a,b)=>a+b,0);
+      document.getElementById('catBars').innerHTML = Object.entries(d.categories)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([c,n])=>`<div style="margin-bottom:9px;">
+          <div style="display:flex;justify-content:space-between;font-size:0.77rem;margin-bottom:2px;">
+            <span style="color:var(--text-secondary);">${esc(c)}</span><span style="color:var(--text-muted);">${n}</span>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(n/total*100)}%;"></div></div>
+        </div>`).join('');
+    }
+
+    // Render new page of cards (different slice each 5s)
+    renderAlerts(d.alerts);
+    document.getElementById('liveFeed').dataset.raw = JSON.stringify(d.alerts);
+
+    // Flash dot
+    const dot = document.getElementById('liveDot');
+    dot.style.background='#fff'; dot.style.boxShadow='0 0 7px #fff';
+    setTimeout(()=>{ dot.style.background='#40c571'; dot.style.boxShadow='0 0 7px #40c571'; },250);
+  }).catch(()=>{ document.getElementById('liveStatus').textContent='CONNECTION ERROR'; });
+}
+
+function togglePause(){
+  paused = !paused;
+  document.getElementById('pauseText').textContent = paused?'Resume':'Pause';
+  document.getElementById('pauseIcon').innerHTML = paused
+    ? '<polygon points="5 3 19 12 5 21 5 3"/>'
+    : '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+  document.getElementById('liveStatus').textContent = paused?'PAUSED':'MONITORING ACTIVE';
+  const dot = document.getElementById('liveDot');
+  dot.style.background = paused?'#ffa94d':'#40c571';
+  dot.style.boxShadow  = paused?'0 0 7px #ffa94d':'0 0 7px #40c571';
+}
+
+// Filter changes → reset to page 0 and fetch immediately
+['fSev','fCat','fMode'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', ()=>{
+    currentPage = 0;
+    poll(true);
+  });
+});
+
+// Clock
+setInterval(()=>{ document.getElementById('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+
+// Boot
+renderAlerts(INIT_ALERTS);
+document.getElementById('liveFeed').dataset.raw = JSON.stringify(INIT_ALERTS);
+setInterval(poll, 5000);
+</script>
+{% endblock %}

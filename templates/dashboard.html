@@ -1,0 +1,1192 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}
+{% if latest_session %}Results for {{ latest_session.filename }}{% else %}Upload a file to see analysis results{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if latest_results %}
+{% set s = latest_results.get('summary', {}) %}
+<!-- Pipeline Architecture — Stage 2.2 linked to Stage 1 -->
+<div class="architecture-card" style="margin-bottom: 24px;">
+    <div class="arch-header">
+        <h3>HADES 3-Stage Detection Pipeline</h3>
+    </div>
+    <div class="pipeline-diagram">
+        <!-- Main flow: 1 → 2.1 → 3 -->
+        <div class="pipe-row pipe-main">
+            <div class="pipeline-stage stage-1" id="pipeStage1">
+                <div class="stage-number">1</div>
+                <div class="stage-info">
+                    <h4>Binary Classifier</h4>
+                    <p>Random Forest</p>
+                    <span class="stage-detail">Normal vs Anomaly</span>
+                </div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-stage stage-2">
+                <div class="stage-number">2.1</div>
+                <div class="stage-info">
+                    <h4>Category Classifiers</h4>
+                    <p>5 Binary Models</p>
+                    <span class="stage-detail">DOS, Botnet, Web, BruteForce, Infiltration</span>
+                </div>
+            </div>
+            <div class="pipeline-arrow">→</div>
+            <div class="pipeline-stage stage-3">
+                <div class="stage-number">3</div>
+                <div class="stage-info">
+                    <h4>Specific Attack</h4>
+                    <p>Per-Category Model</p>
+                    <span class="stage-detail">14+ Attack Types</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Branch: Stage 1 ↘ Stage 2.2 (linked directly) -->
+        <div class="pipe-row pipe-branch">
+            <div class="pipe-branch-connector">
+                <svg viewBox="0 0 100 60" preserveAspectRatio="none" class="branch-svg">
+                    <path d="M50 0 L50 30 L160 30" stroke="#ffa94d" stroke-width="2" fill="none" stroke-dasharray="6,4"/>
+                    <polygon points="156,26 164,30 156,34" fill="#ffa94d"/>
+                </svg>
+                <span class="branch-label">Anomalies from Stage 1</span>
+            </div>
+            <div class="pipeline-stage stage-2-2">
+                <div class="stage-number" style="background:linear-gradient(135deg,#ffa94d,#ffd43b);color:#091413;">2.2</div>
+                <div class="stage-info">
+                    <h4>Multiclass Fallback</h4>
+                    <p style="color:#ffa94d;font-weight:600;">← Linked to Stage 1</p>
+                    <span class="stage-detail">Runs on ALL anomalies • catches escaped attacks</span>
+                </div>
+            </div>
+            <div class="pipeline-arrow" style="color:#ffa94d;">→</div>
+            <div class="pipe-merge-label">
+                <span>Merges with 2.1</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffa94d" stroke-width="2"><path d="M8 6l4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stage Intelligence Cards — click to open model insights -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 20px 20px;border-top:1px solid rgba(64,138,113,0.12);margin-top:4px;">
+
+        <!-- Stage 1 -->
+        <a href="{{ url_for('model_insights.stage1') }}" style="text-decoration:none;"
+           title="Open Stage 1 Model Insights">
+        <div style="background:rgba(64,138,113,0.07);border:1px solid rgba(64,138,113,0.2);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.background='rgba(64,138,113,0.14)';this.style.borderColor='#408A71';"
+             onmouseout="this.style.background='rgba(64,138,113,0.07)';this.style.borderColor='rgba(64,138,113,0.2)';">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="background:linear-gradient(135deg,#408A71,#285A48);color:#fff;font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:4px;">STAGE 1</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);">Binary Classifier</span>
+            </div>
+            <div style="font-size:1.4rem;font-weight:800;color:#e2e8f0;line-height:1;">
+                {{ '{:,}'.format(s.get('total_flows', 0)) }}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Total Flows Inspected</div>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:0.68rem;background:rgba(64,197,113,0.12);color:#40c571;padding:2px 7px;border-radius:4px;">✓ {{ '{:,}'.format(s.get('normal_count', 0)) }} Normal</span>
+                <span style="font-size:0.68rem;background:rgba(255,107,107,0.12);color:#ff6b6b;padding:2px 7px;border-radius:4px;">⚠ {{ '{:,}'.format(s.get('anomaly_count', 0)) }} Anomaly</span>
+            </div>
+            <div style="margin-top:8px;font-size:0.68rem;color:#408A71;">Random Forest · Normal vs Anomaly →</div>
+        </div></a>
+
+        <!-- Stage 2.1 -->
+        <a href="{{ url_for('model_insights.stage2') }}" style="text-decoration:none;"
+           title="Open Stage 2 Model Insights">
+        <div style="background:rgba(64,138,113,0.07);border:1px solid rgba(64,138,113,0.2);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.background='rgba(64,138,113,0.14)';this.style.borderColor='#408A71';"
+             onmouseout="this.style.background='rgba(64,138,113,0.07)';this.style.borderColor='rgba(64,138,113,0.2)';">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="background:linear-gradient(135deg,#4ecdc4,#2980b9);color:#fff;font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:4px;">STAGE 2.1</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);">Category Classifiers</span>
+            </div>
+            <div style="font-size:1.4rem;font-weight:800;color:#e2e8f0;line-height:1;">
+                {{ '{:,}'.format(s.get('detected_by_stage2_1', 0)) }}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Detections via Stage 2.1</div>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:0.68rem;background:rgba(78,205,196,0.12);color:#4ecdc4;padding:2px 7px;border-radius:4px;">5 Binary Models</span>
+                <span style="font-size:0.68rem;background:rgba(78,205,196,0.08);color:#4ecdc4;padding:2px 7px;border-radius:4px;">Primary Path</span>
+            </div>
+            <div style="margin-top:8px;font-size:0.68rem;color:#4ecdc4;">DoS · Botnet · Web · BruteForce · Infiltration →</div>
+        </div></a>
+
+        <!-- Stage 2.2 -->
+        <a href="{{ url_for('model_insights.stage2') }}" style="text-decoration:none;"
+           title="Open Stage 2 Model Insights">
+        <div style="background:rgba(255,169,77,0.05);border:1px solid rgba(255,169,77,0.2);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.background='rgba(255,169,77,0.1)';this.style.borderColor='#ffa94d';"
+             onmouseout="this.style.background='rgba(255,169,77,0.05)';this.style.borderColor='rgba(255,169,77,0.2)';">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="background:linear-gradient(135deg,#ffa94d,#ffd43b);color:#091413;font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:4px;">STAGE 2.2</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);">Multiclass Fallback</span>
+            </div>
+            <div style="font-size:1.4rem;font-weight:800;color:#e2e8f0;line-height:1;">
+                {{ '{:,}'.format(s.get('detected_by_stage2_2', 0)) }}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Detections via Stage 2.2</div>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:0.68rem;background:rgba(255,169,77,0.12);color:#ffa94d;padding:2px 7px;border-radius:4px;">Linked to Stage 1</span>
+                <span style="font-size:0.68rem;background:rgba(255,169,77,0.08);color:#ffa94d;padding:2px 7px;border-radius:4px;">Fallback</span>
+            </div>
+            <div style="margin-top:8px;font-size:0.68rem;color:#ffa94d;">Catches escaped attacks · Runs on ALL anomalies →</div>
+        </div></a>
+
+        <!-- Stage 3 -->
+        <a href="{{ url_for('model_insights.stage3') }}" style="text-decoration:none;"
+           title="Open Stage 3 Model Insights">
+        <div style="background:rgba(162,155,254,0.05);border:1px solid rgba(162,155,254,0.2);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.background='rgba(162,155,254,0.1)';this.style.borderColor='#a29bfe';"
+             onmouseout="this.style.background='rgba(162,155,254,0.05)';this.style.borderColor='rgba(162,155,254,0.2)';">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="background:linear-gradient(135deg,#a29bfe,#6c5ce7);color:#fff;font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:4px;">STAGE 3</span>
+                <span style="font-size:0.68rem;color:var(--text-muted);">Specific Attack ID</span>
+            </div>
+            <div style="font-size:1.4rem;font-weight:800;color:#e2e8f0;line-height:1;">
+                {{ '{:,}'.format(s.get('anomaly_count', 0)) }}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Anomalies Classified</div>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:0.68rem;background:rgba(162,155,254,0.12);color:#a29bfe;padding:2px 7px;border-radius:4px;">Per-Category Model</span>
+                <span style="font-size:0.68rem;background:rgba(162,155,254,0.08);color:#a29bfe;padding:2px 7px;border-radius:4px;">14+ Types</span>
+            </div>
+            <div style="margin-top:8px;font-size:0.68rem;color:#a29bfe;">DoS-Hulk · SSH-Patator · SQLi · XSS · Heartbleed →</div>
+        </div></a>
+
+    </div>
+
+    <!-- Donut Charts Row — inside architecture-card -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0 20px 24px;margin-top:-4px;">
+        
+        <!-- Stage 1 Donut -->
+        <div style="background:rgba(9,20,19,0.4);border:1px solid rgba(64,138,113,0.1);border-radius:12px;padding:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h4 style="margin:0;font-size:0.85rem;color:#e2e8f0;">Normal vs Anomaly</h4>
+                <span style="font-size:0.6rem;background:rgba(64,138,113,0.15);color:#408A71;padding:2px 6px;border-radius:4px;font-weight:700;">STAGE 1</span>
+            </div>
+            <div style="height:140px;position:relative;">
+                <canvas id="binaryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Stage 2 Donut -->
+        <div style="background:rgba(9,20,19,0.4);border:1px solid rgba(64,138,113,0.1);border-radius:12px;padding:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h4 style="margin:0;font-size:0.85rem;color:#e2e8f0;">Detection Method</h4>
+                <span style="font-size:0.6rem;background:rgba(78,205,196,0.15);color:#4ecdc4;padding:2px 6px;border-radius:4px;font-weight:700;">STAGE 2.1 vs 2.2</span>
+            </div>
+            <div style="height:140px;position:relative;">
+                <canvas id="detectionMethodChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Stage 3 Donut -->
+        <div style="background:rgba(9,20,19,0.4);border:1px solid rgba(64,138,113,0.1);border-radius:12px;padding:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h4 style="margin:0;font-size:0.85rem;color:#e2e8f0;">Specific Attack IDs</h4>
+                <span style="font-size:0.6rem;background:rgba(162,155,254,0.15);color:#a29bfe;padding:2px 6px;border-radius:4px;font-weight:700;">STAGE 3</span>
+            </div>
+            <div style="height:140px;position:relative;">
+                <canvas id="stage3DonutChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Charts Row 1: Severity Levels (CVSS mapped, full file) -->
+<div class="charts-row">
+    <div class="chart-card wide">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Severity Levels <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">(CVSS Mapped · Full Dataset)</span></h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge severity">CVSS v3.1</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Chart Explanation:</strong> Categorizes all detected threats by CVSS v3.1 severity tiers — Critical (9.8), High (7.5), Medium (5.3), Low (2.1), Info (Benign) — scaled to the full {{ '{:,}'.format(latest_session.total_flows or 0) }}-packet dataset. Hover any segment to see the exact packet count.
+            </div>
+        </div>
+        <div class="chart-body" style="min-height:260px;">
+            <canvas id="severityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2: Overall Attack Category Distribution (Full Dataset) -->
+<div class="charts-row">
+    <div class="chart-card wide">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Overall Attack Category Distribution
+                    <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">(All {{ '{:,}'.format(latest_session.total_flows or 0) }} Packets)</span>
+                </h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge" style="background:rgba(116,192,252,0.12);color:#74c0fc;border-color:rgba(116,192,252,0.3);">Stage 2 — General Categories</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Chart Explanation:</strong> Attack categories bucketed from the Label column of your uploaded file, scaled to represent all {{ '{:,}'.format(latest_session.total_flows or 0) }} packets. Hover any bar for the exact count.
+            </div>
+        </div>
+        <div class="chart-body" style="min-height: 260px;">
+            <canvas id="stage2Chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 3: Specific Threats (Full Dataset) -->
+<div class="charts-row">
+    <div class="chart-card wide">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Specific Threats Found
+                    <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">(All {{ '{:,}'.format(latest_session.total_flows or 0) }} Packets · This Upload)</span>
+                </h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge" style="background:rgba(162,155,254,0.12);color:#a29bfe;border-color:rgba(162,155,254,0.3);">Stage 3 — Specific Attacks</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Chart Explanation:</strong> Every specific threat signature detected in the Label column of your uploaded file, sorted by volume. All {{ threat_count }} unique attack types shown. Hover any bar for the exact packet count.
+            </div>
+        </div>
+        <div class="chart-body" style="min-height: {{ [320, threat_count * 40] | max }}px;">
+            <canvas id="fileSpecificChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 3b: CVSS Risk Score per Attack Type (Polar Area) -->
+<div class="charts-row">
+    <div class="chart-card wide">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>CVSS v3.1 Risk Score per Attack Type
+                    <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">— Critical → Info</span>
+                </h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge" style="background:rgba(255,107,107,0.15);color:#ff6b6b;border-color:rgba(255,107,107,0.3);">CVSS v3.1</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Chart Explanation:</strong> Polar area chart showing the official CVSS v3.1 base score for each of the 14 specific attack types that HADES is trained to detect. Larger slices = higher severity. Sorted Critical (9.8) → High (7.5). Hover any slice to see the exact CVSS score.
+            </div>
+        </div>
+        <div class="chart-body" style="min-height: 420px;">
+            <canvas id="cvssRiskChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 4: Ports & Protocols (Full Dataset) -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Top Target Ports <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">(Full Dataset)</span></h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge">Network Surface</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Chart Explanation:</strong> Most frequently targeted destination ports computed across ALL {{ '{:,}'.format(latest_session.total_flows or 0) }} packets in your uploaded file. Hover a bar to see the exact packet count.
+            </div>
+        </div>
+        <div class="chart-body" style="min-height: 280px;">
+            <canvas id="portChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>Protocol Distribution <span style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">(Full Dataset)</span></h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+            <div class="chart-badge severity">Layer 4</div>
+            <div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+                <strong>Chart Explanation:</strong> Transport layer protocol breakdown (TCP, UDP, ICMP) across all {{ '{:,}'.format(latest_session.total_flows or 0) }} packets. Hover any segment to see the exact count.
+            </div>
+        </div>
+        <div class="chart-body" style="min-height: 280px;">
+            <canvas id="protocolChart"></canvas>
+        </div>
+    </div>
+</div>
+
+
+{% else %}
+<!-- No analysis yet — show welcome -->
+<div class="table-card" style="text-align:center; padding:60px 32px;">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--green-bright); margin-bottom:20px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <h2 style="margin-bottom:12px; color:var(--text-primary);">No Analysis Results Yet</h2>
+    <p style="color:var(--text-muted); margin-bottom:24px;">Upload a network traffic CSV file to see your full analysis dashboard</p>
+    <a href="{{ url_for('analysis.upload_page') }}" class="btn-primary" style="display:inline-block;">
+        Upload Traffic File →
+    </a>
+</div>
+{% endif %}
+
+
+
+{% if current_user.is_admin %}
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ADMIN CONTROL CENTER — Visible only to admin users            -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="admin-panel-section">
+    <div class="admin-panel-header">
+        <div class="admin-panel-title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <h3>Admin Control Center</h3>
+        </div>
+        <div class="admin-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            ADMIN ACCESS
+        </div>
+    </div>
+
+    <!-- AI Model Health Cards -->
+    <div class="admin-model-grid">
+        <a href="{{ url_for('admin.stage1') }}" class="admin-model-card">
+            <div class="model-card-header">
+                <div class="model-stage-badge stage-1-bg">1</div>
+                <div class="model-status-dot online"></div>
+            </div>
+            <h4>Binary Classifier</h4>
+            <p class="model-type">Random Forest</p>
+            <div class="model-metrics">
+                <div class="model-metric">
+                    <span class="metric-value">{{ admin_data.stage1_accuracy }}%</span>
+                    <span class="metric-label">Accuracy</span>
+                </div>
+                <div class="model-metric">
+                    <span class="metric-value">{{ admin_data.stage1_precision }}%</span>
+                    <span class="metric-label">Precision</span>
+                </div>
+            </div>
+            <div class="model-card-footer">
+                <span class="model-task">Normal vs Anomaly</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+        </a>
+
+        <a href="{{ url_for('admin.stage2') }}" class="admin-model-card">
+            <div class="model-card-header">
+                <div class="model-stage-badge stage-2-bg">2</div>
+                <div class="model-status-dot online"></div>
+            </div>
+            <h4>Category Classifiers</h4>
+            <p class="model-type">5 Binary + Multiclass</p>
+            <div class="model-metrics">
+                <div class="model-metric">
+                    <span class="metric-value">{{ admin_data.stage2_categories }}</span>
+                    <span class="metric-label">Models</span>
+                </div>
+                <div class="model-metric">
+                    <span class="metric-value">{{ admin_data.stage2_detections }}</span>
+                    <span class="metric-label">Detections</span>
+                </div>
+            </div>
+            <div class="model-card-footer">
+                <span class="model-task">Attack Categorization</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+        </a>
+
+        <a href="{{ url_for('admin.stage3') }}" class="admin-model-card">
+            <div class="model-card-header">
+                <div class="model-stage-badge stage-3-bg">3</div>
+                <div class="model-status-dot online"></div>
+            </div>
+            <h4>Specific Classifiers</h4>
+            <p class="model-type">Per-Category RF Models</p>
+            <div class="model-metrics">
+                <div class="model-metric">
+                    <span class="metric-value">{{ admin_data.stage3_attacks }}</span>
+                    <span class="metric-label">Attack Types</span>
+                </div>
+                <div class="model-metric">
+                    <span class="metric-value">{{ admin_data.stage3_models }}</span>
+                    <span class="metric-label">Models</span>
+                </div>
+            </div>
+            <div class="model-card-footer">
+                <span class="model-task">Attack Identification</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+        </a>
+    </div>
+
+    <!-- Quick Actions + Database Overview -->
+    <div class="admin-actions-row">
+        <!-- Database Summary -->
+        <div class="admin-db-summary">
+            <div class="admin-db-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                <h4>Database Overview</h4>
+                <a href="{{ url_for('database.explorer') }}" class="admin-action-link">Open Explorer →</a>
+            </div>
+            <div class="admin-db-stats">
+                <div class="admin-db-stat">
+                    <span class="db-stat-value">{{ admin_data.db_tables }}</span>
+                    <span class="db-stat-label">Tables</span>
+                </div>
+                <div class="admin-db-stat">
+                    <span class="db-stat-value">{{ admin_data.db_total_records }}</span>
+                    <span class="db-stat-label">Records</span>
+                </div>
+                <div class="admin-db-stat">
+                    <span class="db-stat-value">{{ admin_data.db_attack_logs }}</span>
+                    <span class="db-stat-label">Attack Logs</span>
+                </div>
+                <div class="admin-db-stat">
+                    <span class="db-stat-value">{{ admin_data.db_users }}</span>
+                    <span class="db-stat-label">Users</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions Grid -->
+        <div class="admin-quick-actions">
+            <h4>Quick Actions</h4>
+            <div class="admin-actions-grid">
+                <a href="{{ url_for('database.explorer') }}" class="admin-action-card">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    <span>Database Viewer</span>
+                </a>
+                <a href="{{ url_for('response.index') }}" class="admin-action-card">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+                    <span>Response Actions</span>
+                </a>
+                <a href="{{ url_for('analysis.upload_page') }}" class="admin-action-card">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>New Analysis</span>
+                </a>
+                <a href="{{ url_for('simulation.index') }}" class="admin-action-card">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    <span>Simulation Lab</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent System Events -->
+    {% if admin_data.recent_logs %}
+    <div class="admin-events-table">
+        <div class="admin-events-header">
+            <h4>Recent System Events</h4>
+            <a href="{{ url_for('analysis.system_logs') }}" class="admin-action-link">View All →</a>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Level</th>
+                        <th>Event</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in admin_data.recent_logs %}
+                    <tr>
+                        <td class="td-time">{{ log.timestamp.strftime('%H:%M:%S') if log.timestamp else '—' }}</td>
+                        <td><span class="severity-badge {{ log.level|lower }}">{{ log.level }} (CVSS {{ log.level|cvss }})</span></td>
+                        <td><strong>{{ log.event }}</strong></td>
+                        <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ log.details or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if latest_session %}
+<!-- Per-Flow Detection Table -->
+<div class="table-card">
+    <div class="table-header">
+        <div>
+            <h3>Per-Flow Detection Results</h3>
+            <p style="margin: 2px 0 0; font-size: 0.78rem; color: var(--text-muted);">
+                Showing all {{ latest_results.get('per_flow', [])|length }} flows from the analyzed sample &mdash; all charts above reflect the full dataset proportionally.
+            </p>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <a href="{{ url_for('analysis.print_report', session_id=latest_session.id) }}" target="_blank" class="view-all-btn" style="background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);">🖨️ Print Report</a>
+            <a href="{{ url_for('analysis.results', session_id=latest_session.id) }}" class="view-all-btn">Full Results →</a>
+        </div>
+    </div>
+    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Flow #</th>
+                    <th>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            Source IP
+                        </div>
+                    </th>
+                    <th>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            Destination IP
+                        </div>
+                    </th>
+                    <th>Stage 1</th>
+                    <th>Category (2.1)</th>
+                    <th>Detected By</th>
+                    <th>Specific Attack (3)</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody id="perFlowTbody">
+                <!-- Populated by JS -->
+            </tbody>
+        </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid rgba(64,138,113,0.15);background:rgba(9,20,19,0.3);">
+        <button id="pfPrevBtn" class="action-btn" style="padding:6px 14px;background:rgba(64,138,113,0.1);border:1px solid rgba(64,138,113,0.2);color:#e2e8f0;border-radius:6px;cursor:pointer;">← Prev</button>
+        <span id="pfPageInfo" style="font-size:0.8rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">Page 1</span>
+        <button id="pfNextBtn" class="action-btn" style="padding:6px 14px;background:rgba(64,138,113,0.1);border:1px solid rgba(64,138,113,0.2);color:#e2e8f0;border-radius:6px;cursor:pointer;">Next →</button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const flows = {{ latest_results.get('per_flow', []) | tojson }};
+    const tbody = document.getElementById('perFlowTbody');
+    const prevBtn = document.getElementById('pfPrevBtn');
+    const nextBtn = document.getElementById('pfNextBtn');
+    const pageInfo = document.getElementById('pfPageInfo');
+    
+    let currentPage = 1;
+    const rowsPerPage = 100;
+    const totalPages = Math.max(1, Math.ceil(flows.length / rowsPerPage));
+
+    function getCvss(sev) {
+        const map = {'info': '0.0', 'low': '3.9', 'medium': '6.9', 'high': '8.9', 'critical': '10.0'};
+        return map[String(sev).toLowerCase()] || '0.0';
+    }
+
+    function renderPage(page) {
+        tbody.innerHTML = '';
+        const start = (page - 1) * rowsPerPage;
+        const end = Math.min(start + rowsPerPage, flows.length);
+        
+        let html = '';
+        for(let i = start; i < end; i++) {
+            const f = flows[i];
+            const isNormal = (f.stage1 === 'Normal');
+            const rowClass = isNormal ? 'row-normal' : 'row-anomaly';
+            const stage1Lower = String(f.stage1).toLowerCase();
+            
+            let sipHtml = '<span style="color:var(--text-muted);font-style:italic;">—</span>';
+            const sip = f.source_ip || '';
+            if(sip && !['0.0.0.0','None','','nan'].includes(sip)) {
+                if(sip.startsWith('Port:')) sipHtml = `<span style="color:#74c0fc;">🔌 ${sip}</span>`;
+                else sipHtml = `<span style="color: var(--green-light);">↑ ${sip}</span>`;
+            }
+            
+            let dipHtml = '<span style="color:var(--text-muted);font-style:italic;">—</span>';
+            const dip = f.dest_ip || '';
+            if(dip && !['0.0.0.0','None','','nan'].includes(dip)) dipHtml = `<span style="color: #a29bfe;">↓ ${dip}</span>`;
+
+            const cat = f.stage2_1_category;
+            let catHtml = '—';
+            if(cat) catHtml = `<span class="category-badge ${String(cat).toLowerCase().replace('+','')}">${cat}</span>`;
+            
+            const sev = f.severity || 'info';
+            const cvssVal = getCvss(sev);
+            const sevHtml = `<span class="severity-badge ${sev}">${sev.toUpperCase()} (CVSS ${cvssVal})</span>`;
+
+            html += `<tr class="${rowClass}">
+                <td>${f.flow_index}</td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;">${sipHtml}</td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;">${dipHtml}</td>
+                <td><span class="stage1-badge ${stage1Lower}">${f.stage1}</span></td>
+                <td>${catHtml}</td>
+                <td>${f.detected_by || '—'}</td>
+                <td><strong>${f.stage3_specific || '—'}</strong></td>
+                <td>${sevHtml}</td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
+        pageInfo.textContent = `Page ${page} of ${totalPages} (${flows.length} flows)`;
+        
+        prevBtn.style.opacity = page === 1 ? '0.5' : '1';
+        prevBtn.style.pointerEvents = page === 1 ? 'none' : 'auto';
+        nextBtn.style.opacity = page === totalPages ? '0.5' : '1';
+        nextBtn.style.pointerEvents = page === totalPages ? 'none' : 'auto';
+    }
+
+    prevBtn.addEventListener('click', () => { if(currentPage > 1) { currentPage--; renderPage(currentPage); } });
+    nextBtn.addEventListener('click', () => { if(currentPage < totalPages) { currentPage++; renderPage(currentPage); } });
+    
+    renderPage(currentPage);
+});
+</script>
+{% endif %}
+
+<!-- Recent Analysis Sessions -->
+{% if recent_sessions %}
+<div class="table-card" style="margin-top: 32px;">
+    <div class="table-header">
+        <h3>Analysis History</h3>
+        <a href="{{ url_for('analysis.upload_page') }}" class="view-all-btn">New Analysis →</a>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>File</th>
+                    <th>Flows</th>
+                    <th>Normal</th>
+                    <th>Anomalies</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sess in recent_sessions %}
+                <tr>
+                    <td class="td-time">{{ sess.upload_time.strftime('%Y-%m-%d %H:%M') if sess.upload_time else 'N/A' }}</td>
+                    <td class="td-file">{{ sess.filename }}</td>
+                    <td>{{ sess.total_flows or '—' }}</td>
+                    <td class="td-normal">{{ sess.normal_count or '—' }}</td>
+                    <td class="td-anomaly">{{ sess.anomaly_count or '—' }}</td>
+                    <td><span class="status-badge {{ sess.status }}">{{ sess.status|upper }}</span></td>
+                    <td>
+                        {% if sess.status == 'completed' %}
+                        <a href="{{ url_for('analysis.results', session_id=sess.id) }}" class="action-btn">View</a>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<style>
+    .pipeline-diagram {
+        padding: 32px 24px;
+        display: flex; flex-direction: column; gap: 0;
+    }
+    .pipe-row {
+        display: flex; align-items: center; justify-content: center;
+        gap: 16px; flex-wrap: wrap;
+    }
+    .pipe-main {
+        padding-bottom: 0; position: relative; z-index: 2;
+    }
+    .pipe-branch {
+        padding-top: 16px; padding-left: 40px;
+        position: relative;
+    }
+    .pipe-branch-connector {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 4px; min-width: 80px;
+    }
+    .branch-svg {
+        width: 80px; height: 40px;
+    }
+    .branch-label {
+        font-size: 0.6rem; color: #ffa94d;
+        text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+        white-space: nowrap;
+    }
+    .pipe-merge-label {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 0.7rem; color: #ffa94d;
+        font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+        padding: 8px 14px;
+        background: rgba(255, 169, 77, 0.08);
+        border: 1px dashed rgba(255, 169, 77, 0.3);
+        border-radius: 8px;
+        white-space: nowrap;
+    }
+    @media (max-width: 768px) {
+        .pipe-branch { padding-left: 0; flex-direction: column; }
+        .branch-svg { display: none; }
+    }
+
+    /* ═══ Admin Control Center ═══ */
+    .admin-panel-section {
+        margin-top: 32px;
+        margin-bottom: 35px;
+        background: linear-gradient(135deg, rgba(64,138,113,0.06), rgba(176,228,204,0.04));
+        border: 1px solid rgba(64,138,113,0.2);
+        border-radius: 16px;
+        padding: 28px;
+    }
+    .admin-panel-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 24px; padding-bottom: 16px;
+        border-bottom: 1px solid rgba(64,138,113,0.15);
+    }
+    .admin-panel-title {
+        display: flex; align-items: center; gap: 10px; color: var(--green-bright);
+    }
+    .admin-panel-title h3 {
+        margin: 0; font-size: 1.2em; letter-spacing: 0.5px;
+        background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .admin-badge {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+        color: #ffa94d; text-transform: uppercase;
+        padding: 6px 14px;
+        background: rgba(255,169,77,0.1);
+        border: 1px solid rgba(255,169,77,0.3);
+        border-radius: 20px;
+    }
+
+    /* Model Health Cards */
+    .admin-model-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 16px; margin-bottom: 24px;
+    }
+    .admin-model-card {
+        background: var(--card-bg, rgba(9,20,19,0.6));
+        border: 1px solid rgba(64,138,113,0.15);
+        border-radius: 12px; padding: 20px;
+        text-decoration: none; color: inherit;
+        transition: all 0.3s ease; position: relative;
+        overflow: hidden;
+    }
+    .admin-model-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0;
+        height: 3px; background: linear-gradient(90deg, var(--green-bright), var(--green-light));
+        opacity: 0; transition: opacity 0.3s;
+    }
+    .admin-model-card:hover {
+        border-color: rgba(64,138,113,0.4);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .admin-model-card:hover::before { opacity: 1; }
+    .model-card-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .model-stage-badge {
+        width: 36px; height: 36px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 1rem; color: #fff;
+    }
+    .stage-1-bg { background: linear-gradient(135deg, #408A71, #285A48); }
+    .stage-2-bg { background: linear-gradient(135deg, #a29bfe, #6c5ce7); }
+    .stage-3-bg { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+    .model-status-dot {
+        width: 10px; height: 10px; border-radius: 50%;
+    }
+    .model-status-dot.online {
+        background: #00b894;
+        box-shadow: 0 0 8px rgba(0,184,148,0.5);
+        animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+    .admin-model-card h4 {
+        margin: 0 0 4px; font-size: 1em; color: var(--text-primary);
+    }
+    .admin-model-card .model-type {
+        margin: 0 0 16px; font-size: 0.78rem; color: var(--text-muted);
+    }
+    .model-metrics {
+        display: flex; gap: 20px; margin-bottom: 16px;
+    }
+    .model-metric {
+        display: flex; flex-direction: column;
+    }
+    .metric-value {
+        font-size: 1.3em; font-weight: 700; color: var(--green-bright);
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .metric-label {
+        font-size: 0.68rem; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .model-card-footer {
+        display: flex; align-items: center; justify-content: space-between;
+        padding-top: 12px;
+        border-top: 1px solid rgba(64,138,113,0.1);
+    }
+    .model-task {
+        font-size: 0.72rem; color: var(--text-muted);
+    }
+    .model-card-footer svg { color: var(--green-bright); opacity: 0.5; transition: opacity 0.3s; }
+    .admin-model-card:hover .model-card-footer svg { opacity: 1; }
+
+    /* Database Overview + Quick Actions */
+    .admin-actions-row {
+        display: grid; grid-template-columns: 1fr 1fr;
+        gap: 16px; margin-bottom: 24px;
+    }
+    .admin-db-summary, .admin-quick-actions {
+        background: var(--card-bg, rgba(9,20,19,0.6));
+        border: 1px solid rgba(64,138,113,0.15);
+        border-radius: 12px; padding: 20px;
+    }
+    .admin-db-header {
+        display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+        color: var(--text-primary);
+    }
+    .admin-db-header h4 { margin: 0; flex: 1; }
+    .admin-action-link {
+        font-size: 0.75rem; color: var(--green-bright);
+        text-decoration: none; font-weight: 600;
+        transition: color 0.2s;
+    }
+    .admin-action-link:hover { color: var(--green-light); }
+    .admin-db-stats {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    }
+    .admin-db-stat {
+        text-align: center; padding: 12px 8px;
+        background: rgba(64,138,113,0.06);
+        border-radius: 10px;
+        border: 1px solid rgba(64,138,113,0.1);
+    }
+    .db-stat-value {
+        display: block; font-size: 1.5em; font-weight: 800;
+        color: var(--green-bright);
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .db-stat-label {
+        display: block; font-size: 0.65rem; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;
+    }
+    .admin-quick-actions h4 {
+        margin: 0 0 14px; color: var(--text-primary);
+    }
+    .admin-actions-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .admin-action-card {
+        display: flex; align-items: center; gap: 10px;
+        padding: 14px 16px; background: rgba(64,138,113,0.06);
+        border: 1px solid rgba(64,138,113,0.12);
+        border-radius: 10px; text-decoration: none;
+        color: var(--text-primary); font-size: 0.88rem; font-weight: 500;
+        transition: all 0.25s;
+    }
+    .admin-action-card svg { color: var(--green-bright); flex-shrink: 0; }
+    .admin-action-card:hover {
+        background: rgba(64,138,113,0.14);
+        border-color: rgba(64,138,113,0.3);
+        transform: translateX(4px);
+    }
+
+    /* Recent Events Table */
+    .admin-events-table {
+        background: var(--card-bg, rgba(9,20,19,0.6));
+        border: 1px solid rgba(64,138,113,0.15);
+        border-radius: 12px; padding: 20px;
+    }
+    .admin-events-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 14px;
+    }
+    .admin-events-header h4 { margin: 0; color: var(--text-primary); }
+
+    @media (max-width: 900px) {
+        .admin-model-grid { grid-template-columns: 1fr; }
+        .admin-actions-row { grid-template-columns: 1fr; }
+        .admin-db-stats { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+{% if latest_results %}
+<script>
+// ALL dashboard charts rendered from analyzed file data
+(function() {
+    {% set s = latest_results.get('summary', {}) %}
+    const COLORS = {
+        greenLight: '#B0E4CC', greenBright: '#408A71', greenMid: '#285A48', greenDark: '#091413',
+        red: '#ff6b6b', purple: '#a29bfe', orange: '#ffa94d', yellow: '#ffd43b', pink: '#f783ac', blue: '#74c0fc',
+    };
+    const catColors = { 'DOS+DDOS': COLORS.red, 'BOTNET': COLORS.purple, 'INFILTRATION': COLORS.orange, 'WEB_ATTACKS': COLORS.pink, 'BRUTE_FORCE': COLORS.yellow };
+    const sevColors = {
+        'CRITICAL (CVSS 9.8)': COLORS.red,   'HIGH (CVSS 7.5)': COLORS.pink,
+        'MEDIUM (CVSS 5.3)': COLORS.orange,   'LOW (CVSS 2.1)': COLORS.yellow,
+        'INFO (CVSS 0.0)': COLORS.blue
+    };
+    // ── Tooltip: ctx.raw is always the original data number in Chart.js 3 ──
+    // Works for: bar, horizontal bar, doughnut, polar area, pie — no branching needed.
+    function pktLabel(ctx) {
+        return '  ' + Number(ctx.raw ?? 0).toLocaleString() + ' packets';
+    }
+    const TTip = { callbacks: { label: pktLabel } };
+
+    const chartOpts = {
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: {
+            legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { family: 'Inter' } } },
+            tooltip: TTip
+        }
+    };
+    const barOpts = {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: {
+            legend: { display: false },
+            tooltip: TTip
+        },
+        scales: {
+            x: { ticks: { color: '#e2e8f0', callback: v => Number(v).toLocaleString() }, grid: { color: 'rgba(64,138,113,0.08)' } },
+            y: { ticks: { color: '#e2e8f0', font: { size: 11 }, autoSkip: false }, grid: { display: false } }
+        }
+    };
+    // Keep makeTooltip() alias so any inline chart usage still compiles
+    function makeTooltip() { return TTip; }
+
+
+    Chart.defaults.color = '#e2e8f0';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+
+
+    // ── Severity Levels (CVSS-mapped, full dataset) — sorted by count desc ──
+    const sevData = {{ file_stats.get('severity_with_cvss', {})|tojson }};
+    const sevFb   = {{ s.get('severity_distribution', {})|tojson }};
+    const sevSrc  = Object.keys(sevData).length > 0 ? sevData : sevFb;
+    if (Object.keys(sevSrc).length > 0) {
+        // Sort by packet count descending
+        const sevEntries = Object.entries(sevSrc).sort((a, b) => b[1] - a[1]);
+        const sevLabels  = sevEntries.map(e => e[0]);
+        const sevVals    = sevEntries.map(e => e[1]);
+        new Chart(document.getElementById('severityChart'), {
+            type: 'bar',
+            data: { labels: sevLabels, datasets: [{ label: 'Packets', data: sevVals,
+                backgroundColor: sevLabels.map(k => (sevColors[k] || COLORS.greenMid) + '99'),
+                borderColor:     sevLabels.map(k =>  sevColors[k] || COLORS.greenMid),
+                borderWidth: 1, borderRadius: 6 }] },
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: makeTooltip() },
+                scales: {
+                    x: { ticks: { color: '#e2e8f0', font: { size: 10 } }, grid: { color: 'rgba(64,138,113,0.08)' } },
+                    y: { ticks: { color: '#e2e8f0', callback: v => Number(v).toLocaleString() }, grid: { color: 'rgba(64,138,113,0.06)' } }
+                }
+            }
+        });
+    }
+
+    // ── Top Target Ports (full dataset) ─────────────────────────────────
+    const portData = {{ file_stats.get('port_distribution', {})|tojson }};
+    const portFb   = {{ s.get('port_distribution', {})|tojson }};
+    const portSrc  = Object.keys(portData).length > 0 ? portData : portFb;
+    if (Object.keys(portSrc).length > 0) {
+        new Chart(document.getElementById('portChart'), {
+            type: 'bar',
+            data: { labels: Object.keys(portSrc), datasets: [{ label: 'Packets', data: Object.values(portSrc),
+                backgroundColor: COLORS.greenBright + '66', borderColor: COLORS.greenBright, borderWidth: 1, borderRadius: 4 }] },
+            options: barOpts
+        });
+    } else {
+        document.getElementById('portChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No port data</div>';
+    }
+
+    // ── Protocol Distribution (full dataset) ─────────────────────────────
+    const protoData = {{ file_stats.get('protocol_distribution', {})|tojson }};
+    const protoFb   = {{ s.get('protocol_distribution', {})|tojson }};
+    const protoSrc  = Object.keys(protoData).length > 0 ? protoData : protoFb;
+    if (Object.keys(protoSrc).length > 0) {
+        const pc = [COLORS.blue, COLORS.purple, COLORS.orange, COLORS.greenBright, COLORS.pink];
+        const protoMap = {'6': 'TCP', '6.0': 'TCP', '17': 'UDP', '17.0': 'UDP', '0': 'HOPOPT', '0.0': 'HOPOPT', '1': 'ICMP', '1.0': 'ICMP'};
+        const cleanProtoKeys = Object.keys(protoSrc).map(k => protoMap[k] || `Proto ${k}`);
+        new Chart(document.getElementById('protocolChart'), {
+            type: 'pie',
+            data: { labels: cleanProtoKeys, datasets: [{ data: Object.values(protoSrc),
+                backgroundColor: pc.map(c => c + '88'), borderColor: pc, borderWidth: 2 }] },
+            options: chartOpts
+        });
+    } else {
+        document.getElementById('protocolChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No protocol data</div>';
+    }
+
+    // ── Overall Attack Category Distribution (full dataset) ───────────────
+    const catFileSrc = {{ file_stats.get('category_distribution_file', {})|tojson }};
+    if (Object.keys(catFileSrc).length > 0) {
+        const bc = [COLORS.greenMid, COLORS.greenBright, COLORS.red, COLORS.purple, COLORS.orange, COLORS.pink, COLORS.yellow, COLORS.blue];
+        new Chart(document.getElementById('stage2Chart'), {
+            type: 'bar',
+            data: { labels: Object.keys(catFileSrc), datasets: [{ label: 'Packets', data: Object.values(catFileSrc),
+                backgroundColor: Object.keys(catFileSrc).map((_, i) => bc[i % bc.length] + '88'),
+                borderColor:     Object.keys(catFileSrc).map((_, i) => bc[i % bc.length]),
+                borderWidth: 1, borderRadius: 4 }] },
+            options: barOpts
+        });
+    } else {
+        document.getElementById('stage2Chart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No category data</div>';
+    }
+
+    // ── Normal vs Anomaly ─────────────────────────────────────────────────
+    const normalCount  = {{ s.get('normal_count', 0) }};
+    const anomalyCount = {{ s.get('anomaly_count', 0) }};
+    new Chart(document.getElementById('binaryChart'), {
+        type: 'doughnut',
+        data: { labels: ['Normal', 'Anomaly'], datasets: [{ data: [normalCount, anomalyCount],
+            backgroundColor: [COLORS.greenBright + '66', COLORS.red + '66'], borderColor: [COLORS.greenBright, COLORS.red], borderWidth: 2 }] },
+        options: chartOpts
+    });
+
+    // ── Detection Method ──────────────────────────────────────────────────
+    const s21 = {{ s.get('detected_by_stage2_1', 0) }};
+    const s22 = {{ s.get('detected_by_stage2_2', 0) }};
+    new Chart(document.getElementById('detectionMethodChart'), {
+        type: 'doughnut',
+        data: { labels: ['Stage 2.1 (Primary)', 'Stage 2.2 (Fallback)'], datasets: [{ data: [s21, s22],
+            backgroundColor: [COLORS.greenBright + '88', COLORS.orange + '88'], borderColor: [COLORS.greenBright, COLORS.orange], borderWidth: 2 }] },
+        options: chartOpts
+    });
+
+    // ── Stage 3 Donut ─────────────────────────────────────────────────────
+    const spAtkData = {{ s.get('specific_attack_distribution', {})|tojson }};
+    if (Object.keys(spAtkData).length > 0) {
+        const spL = Object.keys(spAtkData).map(k => k.split(': ')[1] || k);
+        const spC = [COLORS.purple, COLORS.orange, COLORS.pink, COLORS.yellow, COLORS.blue, COLORS.greenLight];
+        new Chart(document.getElementById('stage3DonutChart'), {
+            type: 'doughnut',
+            data: { labels: spL, datasets: [{ data: Object.values(spAtkData),
+                backgroundColor: spL.map((_, i) => spC[i%6] + '88'), borderColor: spL.map((_, i) => spC[i%6]), borderWidth: 2 }] },
+            options: chartOpts
+        });
+    } else {
+        document.getElementById('stage3DonutChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-size:0.75rem;font-style:italic;">No Stage 3 data</div>';
+    }
+
+
+    // ── Specific Threats Found (all HADES canonical attacks) ─────────────
+    const fileSpSrc = {{ file_stats.get('specific_threats_file', {})|tojson }};
+    const fileSpFb  = {{ s.get('specific_attack_distribution', {})|tojson }};
+    const fileSpData = Object.keys(fileSpSrc).length > 0 ? fileSpSrc : fileSpFb;
+    if (Object.keys(fileSpData).length > 0) {
+        const spKeys = Object.keys(fileSpData);
+        const spVals = Object.values(fileSpData);
+        // Detected attacks = vivid color; 0-count = muted grey
+        const tColors = [COLORS.red, COLORS.purple, COLORS.orange, COLORS.pink,
+                         COLORS.yellow, COLORS.blue, COLORS.greenLight, COLORS.greenBright,
+                         '#e64980', '#fd7e14', '#20c997', '#339af0', '#94d82d', '#f03e3e'];
+        const bgColors  = spVals.map((v, i) => v > 0 ? tColors[i % tColors.length] + '88' : 'rgba(100,100,100,0.15)');
+        const brdColors = spVals.map((v, i) => v > 0 ? tColors[i % tColors.length] : 'rgba(100,100,100,0.4)');
+        new Chart(document.getElementById('fileSpecificChart'), {
+            type: 'bar',
+            data: { labels: spKeys, datasets: [{ label: 'Packets', data: spVals,
+                backgroundColor: bgColors, borderColor: brdColors,
+                borderWidth: 1, borderRadius: 4, minBarLength: 5 }] },
+            options: barOpts
+        });
+    } else {
+        document.getElementById('fileSpecificChart').parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a8a78;font-style:italic;">No data detected in this file</div>';
+    }
+
+    // ── CVSS v3.1 Risk Score per Attack Type (Polar Area) ────────────────
+    const cvssData = {{ file_stats.get('attack_cvss_scores', {})|tojson }};
+    if (Object.keys(cvssData).length > 0) {
+        const cvssLabels = Object.keys(cvssData);
+        const cvssVals   = Object.values(cvssData);
+        // Color by CVSS tier: ≥9.0=red(critical), ≥8.0=pink(high+), ≥7.5=orange(high)
+        const cvssColors = cvssVals.map(v => {
+            if (v >= 9.0) return COLORS.red;
+            if (v >= 8.0) return COLORS.pink;
+            return COLORS.orange;
+        });
+        new Chart(document.getElementById('cvssRiskChart'), {
+            type: 'polarArea',
+            data: {
+                labels: cvssLabels,
+                datasets: [{
+                    data: cvssVals,
+                    backgroundColor: cvssColors.map(c => c + '99'),
+                    borderColor:     cvssColors,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        min: 0, max: 10,
+                        ticks: {
+                            stepSize: 1,
+                            color: '#e2e8f0',
+                            backdropColor: 'rgba(10, 20, 15, 0.7)',
+                            font: { size: 10, weight: 'bold' },
+                            z: 10
+                        },
+                        grid:      { color: 'rgba(64,138,113,0.18)' },
+                        angleLines: { color: 'rgba(64,138,113,0.12)' },
+                        pointLabels: {
+                            color: '#e2e8f0',
+                            font: { size: 11, family: 'Inter' }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: '#e2e8f0',
+                            font: { family: 'Inter', size: 11 },
+                            padding: 14,
+                            boxWidth: 14
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const score = Number(ctx.raw ?? 0);
+                                const tier = score >= 9.0 ? 'CRITICAL' : score >= 8.0 ? 'HIGH+' : 'HIGH';
+                                return '  CVSS ' + score.toFixed(1) + '  \u2014  ' + tier;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Animate stat counters
+    document.querySelectorAll('.stat-value').forEach(el => {
+        const text = el.textContent.trim().replace(/,/g,'');
+        if (!/^\d+$/.test(text)) return;
+        const target = parseInt(text);
+        if (isNaN(target) || target === 0) return;
+        let current = 0;
+        const step = Math.max(1, Math.floor(target / 40));
+        const timer = setInterval(() => {
+            current += step;
+            if (current >= target) { el.textContent = target.toLocaleString(); clearInterval(timer); }
+            else { el.textContent = current.toLocaleString(); }
+        }, 25);
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

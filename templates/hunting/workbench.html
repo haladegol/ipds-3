@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Threat Hunting Workbench{% endblock %}
+{% block page_title %}Threat Hunting Workbench{% endblock %}
+{% block page_subtitle %}Execute advanced queries and search for stealthy patterns across the HADES signal feed.{% endblock %}
+
+{% block content %}
+<div class="charts-row">
+    <!-- Query Builder -->
+    <div class="chart-card" style="flex: 1; min-width: 300px;">
+        <div class="chart-header">
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h3>🔍 Hunting Query Builder</h3>
+                <button type="button" class="info-btn" onclick="let p = this.closest('.chart-card').querySelector('.chart-info-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none';" title="View Explanation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                </button>
+            </div>
+        
+</div>
+<div class="chart-info-panel" style="display: none; padding: 12px 20px; font-size: 0.88em; color: var(--text-muted); background: rgba(64,138,113,0.08); border-bottom: 1px solid rgba(64,138,113,0.15); line-height: 1.5; border-radius: 0 0 8px 8px; margin-bottom: 8px;">
+    <strong>Chart Explanation:</strong> The primary axis denotes distinct operational segments monitored by the HADES AI pipeline, while the value axis tracks aggregate occurrences, percentage distributions, or statistical thresholds to empower proactive cyber defense posturing.
+</div>
+        <div style="padding: 20px;">
+            <div class="form-group">
+                <label>Search Keyword (IP, Category, Attack)</label>
+                <input type="text" id="huntQuery" class="response-input" placeholder="e.g. 192.168, SQL Injection, DOS" style="background: rgba(0,0,0,0.2);">
+            </div>
+            
+            <div class="form-group">
+                <label>Severity Level</label>
+                <select id="huntSeverity" class="response-input" style="background: rgba(0,0,0,0.2);">
+                    <option value="all">All Severities</option>
+                    <option value="info">Info</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Result Limit</label>
+                <select id="huntLimit" class="response-input" style="background: rgba(0,0,0,0.2);">
+                    <option value="50">50 rows</option>
+                    <option value="100" selected>100 rows</option>
+                    <option value="500">500 rows</option>
+                    <option value="1000">1000 rows (Slow)</option>
+                </select>
+            </div>
+            
+            <button class="btn-primary" onclick="runHunt()" style="width: 100%; margin-top: 10px;">
+                ⚡ Execute Search
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Display -->
+    <div class="table-card" style="flex: 3;">
+        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>📊 Investigation Results</h3>
+            <div id="huntStatus" style="font-size: 0.75rem; color: var(--text-muted);">Enter query to begin hunting</div>
+        </div>
+        <div class="table-responsive" style="max-height: 600px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Source IP</th>
+                        <th>Category</th>
+                        <th>Specific Attack</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="huntResultsBody">
+                    <tr><td colspan="6" class="empty-state">No active investigation loaded.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function runHunt() {
+    const query = document.getElementById('huntQuery').value;
+    const severity = document.getElementById('huntSeverity').value;
+    const limit = document.getElementById('huntLimit').value;
+    const status = document.getElementById('huntStatus');
+    const tableBody = document.getElementById('huntResultsBody');
+    
+    status.innerHTML = '<span style="color: var(--orange);">Searching...</span>';
+    tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Engaging intelligence engine...</td></tr>';
+    
+    try {
+        const response = await fetch("{{ url_for('hunting.run_query') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({query, severity, limit})
+        });
+        
+        const data = await response.json();
+        
+        if (data.results.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No matching patterns found.</td></tr>';
+            status.innerHTML = 'Found 0 results';
+            return;
+        }
+        
+        let html = '';
+        data.results.forEach(r => {
+            html += `
+                <tr>
+                    <td style="font-size: 0.75rem; color: var(--text-muted);">${r.timestamp}</td>
+                    <td><code>${r.source}</code></td>
+                    <td><span class="category-badge">${r.category}</span></td>
+                    <td><strong>${r.specific}</strong></td>
+                    <td><span class="severity-badge ${r.severity}">${r.severity.toUpperCase()}</span></td>
+                    <td><span style="color: ${r.action === 'Dropped' ? 'var(--red)' : 'var(--green)'}; font-size: 0.7rem; font-weight: 700;">${r.action.toUpperCase()}</span></td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+        status.innerHTML = `<span style="color: var(--green);">Found ${data.results.length} patterns</span>`;
+    } catch (e) {
+        status.innerHTML = '<span style="color: var(--red);">Query Failed</span>';
+        tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">An error occurred while hunting.</td></tr>';
+    }
+}
+
+// Support Enter key
+document.getElementById('huntQuery').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') runHunt();
+});
+</script>
+
+<style>
+.category-badge {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+}
+</style>
+{% endblock %}
