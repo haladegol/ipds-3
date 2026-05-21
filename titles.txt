@@ -1,0 +1,69 @@
+🔬 Pipeline Decision Path
+🔔 Notification Settings
+2.1 vs 2.2 Cross-Validation Score
+📊 Detection Breakdown
+📊 Enforcement Strategy Mix
+<span class="category-badge {{ group.category|lower|replace('+','') }}">{{ group.category }}</span> — {{ group.attacks|length }} Specific Attacks
+🔍 Hunting Query Builder
+📈 Confidence Statistics
+📊 Confusion Matrix
+🛡️ MITRE Tactical Coverage
+Normal vs Anomaly
+Threat Intensity Timeline
+ROC Curve (Simulated)
+Detection Method Comparison
+🎯 Specific Attack Classification
+Category Distribution
+HADES 3-Stage Detection Pipeline
+🖥️ Vulnerable Asset Registry
+Threat Activity Timeline
+Detection Engine Usage
+Per-Attack Benchmark Accuracy
+📊 Feature Importance Analysis
+<span class="category-badge {{ m.category|lower|replace('+','') }}">{{ m.category }}</span> — {{ m.attacks|length }} Specific Attacks
+🔒 Security — Change Password
+📈 Threat Intensity Trends
+📊 Risk Exposure by Category
+Training Loss Convergence
+🛡️ Protection Pattern Registry
+📊 Confusion Matrix — Stage 2.2 Multiclass
+📊 Confusion Matrix (Benchmark)
+Attack Category Distribution
+Packet Stream
+Detection Method
+Category Distribution (Current)
+Protocol Distribution
+📊 Detection Method: 2.1 vs 2.2
+Accuracy Over Training Epochs
+🛡️ Attack Intelligence — {{ profile.get('label', current_result.attack_type) }}
+🛡️ Advanced IPS Intelligence
+{{ profile.get('icon','') }} {{ profile.get('label', current_result.attack_type) }} — Simulation Complete
+⚙️ General Settings
+📊 Confusion Matrix (Stage 2.2 Benchmark)
+Per-Category Accuracy
+🛡️ Advanced Enforcement Layer
+Analysis History — Normal vs Anomaly
+🛡️ Add Firewall Rule
+🧠 Why Was This Flagged?
+🏴󠁡󠁦󠁬󠁯󠁶󠁿 Top Attacker Sources
+Detection Distribution
+🧠 Model Internal State
+Detection Distribution (Current Analysis)
+⚡ Stage 2.1 — 5 Binary Category Classifiers
+🔬 Synthetic Traffic Feature Ranges
+Specific Attack Types (Dataset Wide)
+⚠️ Severity Distribution
+Per-Flow Detection Sample
+Per-Category Accuracy %
+👤 Account Info
+Overall Attack Category Distribution (Dataset Wide)
+Severity Levels
+Confusion Matrix
+Detection Method: 2.1 vs 2.2
+Detection Efficiency
+📊 Top 20 Feature Importance
+🚫 Block IP Address
+⚡ {{ model.stage2_1.name }}
+Severity Distribution
+Precision-Recall Tradeoff
+Severity Breakdown
